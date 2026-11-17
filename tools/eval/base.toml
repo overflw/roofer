@@ -1,0 +1,22 @@
+polygon-source = "__FP__"
+id-attribute = "identificatie"
+split-cjseq = false
+
+[[pointclouds]]
+name = "ALS"
+quality = 1
+source = ['__PC__']
+
+[reconstruction]
+clip-terrain = false
+
+[reconstruction.plane-detector]
+plane-epsilon = 0.2
+min-plane-points = 25
+max-plane-count = 700
+
+[reconstruction.line-regulariser]
+extension = 10.0
+
+[reconstruction.arrangement-optimiser]
+complexity-factor = 0.95

@@ -1,0 +1,41 @@
+{
+  "comment": "Prototype (untested here, PDAL not installed in sandbox; needs PDAL >= 2.6 for WHERE-expressions). Reclassify class-6 points that are vegetation-like and not on a locally planar patch to class 5. Usage: pdal pipeline pdal_roof_veg.json --readers.las.filename=in.laz --writers.las.filename=out.laz [--filters.colorization.raster=dop_rgbi.vrt]",
+  "pipeline": [
+    { "type": "readers.las", "filename": "in.laz" },
+
+    { "type": "filters.ferry", "dimensions": "=>NDVI, =>VegCue" },
+
+    { "type": "filters.colorization",
+      "tag": "dop",
+      "raster": "dop_rgbi.vrt",
+      "dimensions": "Red:1:1.0, Infrared:4:1.0",
+      "comment": "OPTIONAL: remove this stage when the LAZ already carries Red+Infrared (PF8 / bDOM). Overwrites Red; use a VRT over DOP COGs/JP2s." },
+
+    { "type": "filters.assign",
+      "value": [
+        "NDVI = (Infrared - Red) / (Infrared + Red + 1)",
+        "VegCue = 1 WHERE Classification == 6 && NumberOfReturns > 1 && ReturnNumber < NumberOfReturns",
+        "VegCue = 1 WHERE Classification == 6 && NDVI > 0.25"
+      ] },
+
+    { "type": "filters.covariancefeatures",
+      "knn": 12,
+      "threads": 4,
+      "feature_set": "Planarity,SurfaceVariation,Verticality",
+      "where": "Classification == 6",
+      "comment": "SurfaceVariation = l3/(l1+l2+l3); computed on all points within knn, consider running on class-6-only view (filters.range + merge) for cleaner neighbourhoods" },
+
+    { "type": "filters.assign",
+      "value": [
+        "Classification = 5 WHERE Classification == 6 && VegCue == 1 && SurfaceVariation > 0.01",
+        "Classification = 5 WHERE Classification == 6 && VegCue == 1 && NDVI > 0.55 && NumberOfReturns > 1 && ReturnNumber < NumberOfReturns"
+      ] },
+
+    { "type": "writers.las",
+      "filename": "out.laz",
+      "minor_version": 4,
+      "dataformat_id": 8,
+      "forward": "all",
+      "extra_dims": "NDVI=float32,SurfaceVariation=float32" }
+  ]
+}
