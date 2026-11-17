@@ -165,10 +165,11 @@ namespace roofer {
      *
      * Region growing can split one roof plane into several regions, for
      * example when the plane drifts while growing or when noisy normals stop
-     * the growth. This refits every region on all its inliers and then
-     * greedily merges the adjacent pair whose merged plane fits best, as long
-     * as the merged plane fits the points of both regions about as well as
-     * their own planes do. Merged regions keep the lowest region id.
+     * the growth. This greedily merges the adjacent pair whose merged plane
+     * fits best, as long as the merged plane fits the points of both regions
+     * about as well as their own planes do. Merged regions keep the lowest
+     * region id and get the plane fitted to all their points; other regions
+     * are left as they are.
      *
      * @param regions regions from the region grower; index 0 is the
      * unsegmented placeholder and is left untouched
@@ -187,7 +188,6 @@ namespace roofer {
         auto& region = regions[i];
         if (region.get_region_id() == 0 || region.inliers.size() < 3) continue;
         id_to_index[region.get_region_id()] = i;
-        cds.fit_plane(region.inliers, region.plane);
         rms[region.get_region_id()] =
             plane_rms(cds, region.inliers, region.plane);
       }

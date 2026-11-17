@@ -34,6 +34,15 @@ namespace {
     }
   };
 
+  // fit each region's plane, as the region grower does
+  void fit_planes(planedect::PlaneDS& pds,
+                  std::vector<planedect::PlaneRegion>& regions) {
+    for (auto& region : regions) {
+      if (region.get_region_id() != 0)
+        pds.fit_plane(region.inliers, region.plane);
+    }
+  }
+
   planedect::RegionMergeParams default_params() {
     return {10.0 * std::numbers::pi / 180.0, 1.2, 0.02};
   }
@@ -50,6 +59,7 @@ TEST_CASE("adjacent coplanar regions are merged", "[planedetector]") {
   f.adjacencies[2][1] = 10;
   f.adjacencies[3][2] = 10;
   planedect::PlaneDS pds(f.points, f.normals);
+  fit_planes(pds, f.regions);
 
   auto merges = planedect::merge_coplanar_regions(
       pds, f.regions, f.adjacencies, f.region_ids, default_params());
@@ -70,6 +80,7 @@ TEST_CASE("parallel regions with a step are not merged", "[planedetector]") {
   f.add_region(2, 5, 10, 0.6F, 0.4F, rng);
   f.adjacencies[2][1] = 10;
   planedect::PlaneDS pds(f.points, f.normals);
+  fit_planes(pds, f.regions);
 
   auto merges = planedect::merge_coplanar_regions(
       pds, f.regions, f.adjacencies, f.region_ids, default_params());
@@ -85,6 +96,7 @@ TEST_CASE("coplanar regions that are not adjacent are not merged",
   f.add_region(1, 0, 5, 0.6F, 0, rng);
   f.add_region(2, 20, 25, 0.6F, 0, rng);
   planedect::PlaneDS pds(f.points, f.normals);
+  fit_planes(pds, f.regions);
 
   auto merges = planedect::merge_coplanar_regions(
       pds, f.regions, f.adjacencies, f.region_ids, default_params());
