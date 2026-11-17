@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <functional>
+#include <numbers>
 #include <roofer/reconstruction/PlaneDetector.hpp>
 #include <roofer/reconstruction/PlaneDetectorBase.hpp>
 #include <utility>
@@ -281,6 +282,12 @@ namespace roofer {
           R.min_segment_count = cfg.min_plane_points;
           if (points.size() > cfg.min_plane_points) {
             R.grow_regions_with_limits(PDS, DNTester, cfg.max_plane_count);
+          }
+          if (cfg.merge_coplanar) {
+            planedect::merge_coplanar_regions(
+                PDS, R.regions, R.adjacencies, R.region_ids,
+                {cfg.merge_max_angle * std::numbers::pi_v<double> / 180.0,
+                 cfg.merge_rms_factor, cfg.merge_rms_offset});
           }
           total_plane_cnt = R.regions.size();
 
