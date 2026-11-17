@@ -141,6 +141,7 @@ namespace roofer::reconstruction {
       result.line_regulariser.distance_threshold *= distance_scale;
       result.line_regulariser.extension *= distance_scale;
       result.segment_rasteriser.cell_size *= distance_scale;
+      result.arrangement_optimiser.max_data_distance *= distance_scale;
       result.arrangement_builder.snap_tolerance *= distance_scale;
       result.arrangement_builder.footprint_extension *= distance_scale;
       result.arrangement_dissolver.step_height_threshold *= distance_scale;
