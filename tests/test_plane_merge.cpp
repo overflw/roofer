@@ -102,3 +102,12 @@ TEST_CASE("coplanar regions that are not adjacent are not merged",
       pds, f.regions, f.adjacencies, f.region_ids, default_params());
   CHECK(merges == 0);
 }
+
+TEST_CASE("no regions when region growing was skipped", "[planedetector]") {
+  Fixture f;
+  planedect::PlaneDS pds(f.points, f.normals);
+  auto merges = planedect::merge_coplanar_regions(
+      pds, f.regions, f.adjacencies, f.region_ids, default_params());
+  CHECK(merges == 0);
+  CHECK(f.regions.empty());
+}

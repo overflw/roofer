@@ -182,6 +182,8 @@ namespace roofer {
         PlaneDS& cds, RegionVec& regions,
         const std::map<size_t, std::map<size_t, size_t>>& adjacencies,
         std::vector<size_t>& region_ids, const RegionMergeParams& params) {
+      // no regions when region growing was skipped for too few points
+      if (regions.empty()) return 0;
       std::map<size_t, size_t> id_to_index;
       std::map<size_t, double> rms;
       for (size_t i = 0; i < regions.size(); ++i) {
