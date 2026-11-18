@@ -116,8 +116,9 @@ namespace roofer::reconstruction {
    * within CELL = 3r, and more than EDGE = 2r inside the footprint, where
    * parapets run along the walls. Searches straight lines in them (offset
    * bins of r/2 over 1° steps) and keeps a line at least `min_length` long
-   * with enough points in 70 % of its metres and no broad block (PV rows)
-   * beside it. Its strip is r wide, and an end within 5r of the footprint's
+   * with enough points in 70 % of its metres, no broad block (PV rows)
+   * beside it and the roof not rising across it as much on one side as it
+   * falls on the other (the flank of a ridge). Its strip is r wide, and an end within 5r of the footprint's
    * border runs on to it (`snap_wall_top`).
    *
    * @param planes plane coefficients (a, b, c, d) per label
@@ -315,7 +316,30 @@ namespace roofer::reconstruction {
                  off = std::abs(nx * pts[i][0] + ny * pts[i][1] - centre);
           beside += u >= lo && u <= hi && off >= BIN && off < BESIDE;
         }
-        if (beside <= THIN * at.size()) {
+        // a wall stands over the roof on one side at least; a line on the
+        // flank of a broader ridge has it rising across as much as falling
+        std::array<std::vector<double>, 3> band;
+        for (size_t i = 0; i < pts.size(); ++i) {
+          double u = ux * pts[i][0] + uy * pts[i][1],
+                 v = nx * pts[i][0] + ny * pts[i][1] - centre;
+          if (u >= lo && u <= hi && std::abs(v) < 3 * BIN)
+            band[v < -BIN ? 0 : v < BIN ? 1 : 2].push_back(pts[i][2]);
+        }
+        auto median = [](std::vector<double>& z) {
+          std::nth_element(z.begin(), z.begin() + z.size() / 2, z.end());
+          return z[z.size() / 2];
+        };
+        bool ramp = false;
+        if (!band[0].empty() && !band[1].empty() && !band[2].empty()) {
+          double top = median(band[1]), rise = top - median(band[0]),
+                 on = median(band[2]) - top;
+          ramp = rise * on > 0 &&
+                 std::min(std::abs(rise), std::abs(on)) >
+                     params.min_height / 2 &&
+                 std::max(std::abs(rise), std::abs(on)) <
+                     2 * std::min(std::abs(rise), std::abs(on));
+        }
+        if (beside <= THIN * at.size() && !ramp) {
           // z = alpha + g * u, least squares
           double su = 0, sz = 0, suu = 0, suz = 0, n = at.size();
           for (auto i : at) {

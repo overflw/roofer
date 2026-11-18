@@ -6,7 +6,8 @@
 using namespace roofer::reconstruction;
 namespace {
   // A flat roof 20 x 10 m at 10 m, 16 points/m², segmented as plane 1 but
-  // where `extra` raises a point; a raised point stays unsegmented.
+  // where `extra` raises a point; a raised point stays unsegmented, one
+  // raised 2.5 m is on plane 2.
   template <typename F>
   std::vector<WallTop> detect(
       F extra, std::vector<std::vector<std::array<double, 2>>> rings = {}) {
@@ -18,9 +19,11 @@ namespace {
       for (float y = 0.125F; y < 10; y += 0.25F) {
         float h = extra(x, y);
         pts.push_back({x, y, 10 + h + noise(rng)});
-        labels.push_back(h > 0.2F ? 0 : 1);
+        labels.push_back(h > 2.4F ? 2 : h > 0.2F ? 0 : 1);
       }
-    return detect_wall_tops(pts, labels, {{1, {0, 0, 1, -10}}}, rings);
+    return detect_wall_tops(pts, labels,
+                            {{1, {0, 0, 1, -10}}, {2, {0, 0, 1, -12.5}}},
+                            rings);
   }
 }  // namespace
 
@@ -44,6 +47,15 @@ TEST_CASE("PV rows and scattered points are no walls") {
   CHECK(detect([&](float, float) {
           return u(rng) < 0.05F ? 0.5F : 0.0F;
         }).empty());
+}
+
+TEST_CASE("the steep flank of a higher roof is no wall, one against it is") {
+  CHECK(detect([](float x, float) {
+          return std::clamp(2.5F * (x - 8), 0.0F, 2.5F);
+        }).empty());
+  CHECK(detect([](float x, float) {
+          return x > 8.4F ? 2.5F : x > 8 ? 0.8F : 0.0F;
+        }).size() == 1);
 }
 
 TEST_CASE("a broad raised band along the border is no wall") {
