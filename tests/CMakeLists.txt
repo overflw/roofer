@@ -125,6 +125,10 @@ add_executable(test_polygon_snapper test_polygon_snapper.cpp)
 target_link_libraries(test_polygon_snapper PRIVATE Catch2::Catch2WithMain roofer-core)
 catch_discover_tests(test_polygon_snapper)
 
+add_executable(test_wall_tops test_wall_tops.cpp)
+target_link_libraries(test_wall_tops PRIVATE Catch2::Catch2WithMain roofer-core)
+catch_discover_tests(test_wall_tops)
+
 add_executable(test_underpasses test_underpasses.cpp)
 target_link_libraries(test_underpasses PRIVATE Catch2::Catch2WithMain roofer-core)
 catch_discover_tests(test_underpasses)

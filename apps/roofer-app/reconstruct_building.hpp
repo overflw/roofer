@@ -19,6 +19,7 @@
 // Author(s):
 // Ravi Peters
 #pragma once
+#include <set>
 #ifdef RF_USE_RERUN
 // Adapters so we can log eigen vectors as rerun positions:
 template <>
@@ -362,8 +363,10 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
       PlaneDetector->detect(building.pointcloud_building, plane_detector_cfg);
       timings["PlaneDetector"] = std::chrono::high_resolution_clock::now() - t0;
       t0 = std::chrono::high_resolution_clock::now();
+      auto ground_detector_cfg = plane_detector_cfg;
+      ground_detector_cfg.detect_wall_tops = false;
       PlaneDetector_ground->detect(building.pointcloud_ground,
-                                   plane_detector_cfg);
+                                   ground_detector_cfg);
       timings["PlaneDetector_ground"] =
           std::chrono::high_resolution_clock::now() - t0;
 
@@ -408,11 +411,93 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
     //         "world/segmented_points",
     //         rerun::Points3D(points_roof).with_class_ids(PlaneDetector->plane_id));
     // #endif
+    // Walls standing on the roof (detect-wall-tops), each a plane of its own.
+    // Too narrow for an alpha shape, a wall top takes its strip instead, in
+    // the heightfield here and as lines in the arrangement below.
+    std::map<int, roofer::reconstruction::WallTop> wall_tops;
+    if (reconstruction.plane_detector.detect_wall_tops) {
+      std::vector<std::vector<std::array<double, 2>>> rings(1);
+      for (auto& p : building.footprint) rings[0].push_back({p[0], p[1]});
+      for (auto& hole : building.footprint.interior_rings()) {
+        rings.emplace_back();
+        for (auto& p : hole) rings.back().push_back({p[0], p[1]});
+      }
+      auto& labels = PlaneDetector->plane_id;
+      auto& planes = PlaneDetector->pts_per_roofplane;
+      std::map<int, std::array<double, 4>> coefficients;
+      int id = 0;
+      for (auto& [k, v] : planes) {
+        coefficients[k] = {v.first.a(), v.first.b(), v.first.c(), v.first.d()};
+        id = std::max(id, k);
+      }
+      roofer::reconstruction::WallTopParams params{
+          .min_height = reconstruction.plane_detector.wall_top_min_height,
+          .max_height = reconstruction.plane_detector.wall_top_max_height,
+          .min_length = reconstruction.plane_detector.wall_top_min_length,
+          .max_slope = reconstruction.plane_detector.wall_top_max_slope,
+          .alpha_radius = std::sqrt(reconstruction.alpha_shaper.alpha)};
+      std::set<int> taken_from;
+      for (auto& w : roofer::reconstruction::detect_wall_tops(
+               building.pointcloud_building, labels, coefficients, rings,
+               params)) {
+        ++id;
+        for (auto i : w.points) {
+          taken_from.insert(labels[i]);
+          labels[i] = id;
+        }
+        wall_tops[id] = w;
+      }
+      // the planes the walls took points from keep the rest, if enough
+      std::map<int, std::vector<roofer::Point>> kept;
+      for (size_t i = 0; i < labels.size(); ++i) {
+        if (taken_from.count(labels[i]) || wall_tops.count(labels[i])) {
+          auto& p = building.pointcloud_building[i];
+          kept[labels[i]].emplace_back(p[0], p[1], p[2]);
+        }
+      }
+      for (auto l : taken_from) {
+        if (l <= 0) continue;
+        if (kept[l].size() >=
+            size_t(reconstruction.plane_detector.min_plane_points)) {
+          planes[l].second = kept[l];
+        } else {
+          planes.erase(l);
+          PlaneDetector->plane_adjacencies.erase(l);
+          for (auto& [k, adjacent] : PlaneDetector->plane_adjacencies)
+            adjacent.erase(l);
+          for (auto& label : labels)
+            if (label == l) label = 0;
+        }
+      }
+      for (auto& [l, w] : wall_tops)
+        planes[l] = {roofer::Plane(w.a, w.b, w.c, w.d), kept[l]};
+    }
+
     t0 = std::chrono::high_resolution_clock::now();
     auto AlphaShaper = roofer::reconstruction::createAlphaShaper();
     AlphaShaper->compute(PlaneDetector->pts_per_roofplane,
                          reconstruction.alpha_shaper);
     timings["AlphaShaper"] = std::chrono::high_resolution_clock::now() - t0;
+    if (!wall_tops.empty()) {
+      std::vector<roofer::LinearRing> alpha_rings;
+      roofer::vec1i ids;
+      for (size_t i = 0; i < AlphaShaper->alpha_rings.size(); ++i) {
+        if (wall_tops.count(AlphaShaper->roofplane_ids[i])) continue;
+        alpha_rings.push_back(AlphaShaper->alpha_rings[i]);
+        ids.push_back(AlphaShaper->roofplane_ids[i]);
+      }
+      AlphaShaper->alpha_rings = std::move(alpha_rings);
+      AlphaShaper->roofplane_ids = std::move(ids);
+      for (const auto& [id, w] : wall_tops) {
+        auto c = roofer::reconstruction::wall_top_corners(w);
+        auto z = [&](const std::array<double, 2>& p) {
+          return roofer::arr3f{float(p[0]), float(p[1]),
+                               float(-(w.a * p[0] + w.b * p[1] + w.d) / w.c)};
+        };
+        AlphaShaper->alpha_triangles.push_back({z(c[0]), z(c[1]), z(c[2])});
+        AlphaShaper->alpha_triangles.push_back({z(c[0]), z(c[2]), z(c[3])});
+      }
+    }
     // logger.debug("Completed AlphaShaper (roof), found {} rings, {} labels",
     //  AlphaShaper->alpha_rings.size(),
     //  AlphaShaper->roofplane_ids.size());
@@ -482,6 +567,14 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
                              PlaneIntersector->segments,
                              reconstruction.line_regulariser);
     timings["LineRegulariser"] = std::chrono::high_resolution_clock::now() - t0;
+    for (const auto& [id, w] : wall_tops) {
+      for (auto& [p, q] : roofer::reconstruction::wall_top_edges(
+               w, reconstruction.line_regulariser.extension)) {
+        LineRegulariser->exact_regularised_edges.emplace_back(
+            roofer::EPECK::Point_2(p[0], p[1]),
+            roofer::EPECK::Point_2(q[0], q[1]));
+      }
+    }
     // logger.debug("Completed LineRegulariser");
 #ifdef RF_USE_RERUN
     if (cfg->use_rerun) {
@@ -546,6 +639,38 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
                                   optimiser_config);
     timings["ArrangementOptimiser"] =
         std::chrono::high_resolution_clock::now() - t0;
+    // A wall top's plane can fit a cell off its wall as well as the roof
+    // does; there the cell takes the roof plane that fits it best.
+    if (!wall_tops.empty()) {
+      std::vector<std::pair<int, roofer::Plane>>
+          roof_labels;  // the optimiser's
+      for (auto& [k, v] : PlaneDetector->pts_per_roofplane)
+        if (k >= 1) roof_labels.emplace_back(k, v.first);
+      for (auto f : arrangement.face_handles()) {
+        auto w = wall_tops.find(f->data().segid);
+        if (!f->data().in_footprint || w == wall_tops.end()) continue;
+        double cx = 0, cy = 0;
+        int n = 0;
+        auto he = f->outer_ccb(), first = he;
+        do {
+          cx += CGAL::to_double(he->source()->point().x());
+          cy += CGAL::to_double(he->source()->point().y());
+          ++n;
+        } while (++he != first);
+        if (roofer::reconstruction::in_wall_top(w->second, cx / n, cy / n))
+          continue;
+        const auto& cost = f->data().vertex_label_cost;
+        size_t best = cost.size();
+        for (size_t i = 0; i < roof_labels.size() && i < cost.size(); ++i)
+          if (!wall_tops.count(roof_labels[i].first) &&
+              (best == cost.size() || cost[i] < cost[best]))
+            best = i;
+        if (best == cost.size()) continue;
+        f->data().label = best;
+        f->data().segid = roof_labels[best].first;
+        f->data().plane = roof_labels[best].second;
+      }
+    }
     // logger.debug("Completed ArrangementOptimiser");
     // rec.log("world/optimised_partition", rerun::LineStrips3D(
     // roofer::reconstruction::arr2polygons(arrangement) ));
@@ -573,6 +698,29 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
       compute_mesh_properties(
           building.multisolids_lod12, building.multisolids_lod13,
           building.multisolids_lod22, building.z_offset, cfg);
+      // a roof polygon on a wall's strip and plane is the top of that wall;
+      // the roof beside it lies at least wall_top_min_height lower
+      if (!cfg->a_wall_top.empty() && !wall_tops.empty()) {
+        for (auto& [i, mesh] : building.multisolids_lod22) {
+          auto& polygons = mesh.get_polygons();
+          auto& labels = mesh.get_labels();
+          auto& attributes = mesh.get_attributes();
+          for (size_t j = 0; j < polygons.size(); ++j) {
+            if (labels[j] != 1 || polygons[j].empty()) continue;
+            std::array<double, 3> c{0, 0, 0};
+            for (auto& p : polygons[j])
+              for (int k = 0; k < 3; ++k) c[k] += p[k] / polygons[j].size();
+            for (const auto& [id, w] : wall_tops) {
+              if (roofer::reconstruction::in_wall_top(w, c[0], c[1]) &&
+                  std::abs(c[2] + (w.a * c[0] + w.b * c[1] + w.d) / w.c) <
+                      reconstruction.plane_detector.wall_top_min_height / 2) {
+                attributes[j].insert(cfg->a_wall_top, true);
+                break;
+              }
+            }
+          }
+        }
+      }
     }
     timings["extrude"] = std::chrono::high_resolution_clock::now() - t0;
 

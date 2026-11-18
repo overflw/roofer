@@ -83,7 +83,21 @@ namespace roofer::reconstruction {
   X(bool, regularise_axis_symmetry, false, "Regularise plane symmetry.",       \
     config::no_validation<bool>(), public_)                                    \
   X(int, max_plane_count, 900, "Maximum detected planes before aborting.",     \
-    config::greater_than(0), public_)
+    config::greater_than(0), public_)                                          \
+  X(bool, detect_wall_tops, false,                                             \
+    "Add a plane on top of each wall standing on a roof.",                     \
+    config::no_validation<bool>(), public_)                                    \
+  X(float, wall_top_min_height, 0.3F,                                          \
+    "Lowest wall above its roof plane, in metres.", config::at_least(0.0F),    \
+    public_)                                                                   \
+  X(float, wall_top_max_height, 1.5F,                                          \
+    "Highest wall above its roof plane, in metres.", config::at_least(0.0F),   \
+    public_)                                                                   \
+  X(float, wall_top_min_length, 5.0F, "Shortest wall, in metres.",             \
+    config::greater_than(0.0F), public_)                                       \
+  X(float, wall_top_max_slope, 10.0F,                                          \
+    "Steepest roof plane a wall is searched on, in degrees.",                  \
+    config::at_least(0.0F), public_)
 
   struct PlaneDetectorConfig {
     using Self = PlaneDetectorConfig;

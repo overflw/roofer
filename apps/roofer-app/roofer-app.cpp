@@ -71,6 +71,7 @@ namespace fs = std::filesystem;
 #include <roofer/reconstruction/PlaneDetector.hpp>
 #include <roofer/reconstruction/PlaneIntersector.hpp>
 #include <roofer/reconstruction/SegmentRasteriser.hpp>
+#include <roofer/reconstruction/WallTopDetector.hpp>
 #include <roofer/reconstruction/SimplePolygonExtruder.hpp>
 
 // serialisation
