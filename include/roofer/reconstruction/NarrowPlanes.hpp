@@ -20,6 +20,7 @@
 #include <cmath>
 #include <map>
 #include <optional>
+#include <set>
 #include <vector>
 
 namespace roofer::reconstruction {
@@ -64,6 +65,9 @@ namespace roofer::reconstruction {
     if (spread >= alpha_radius / 2 || umax - umin < 2 * alpha_radius ||
         umax - umin < 4 * (vmax - vmin))
       return std::nullopt;
+    // points on one line (a scan line) still make a rectangle, not a segment
+    double pad = std::max(0.0, alpha_radius / 10 - (vmax - vmin)) / 2;
+    vmin -= pad, vmax += pad;
     auto at = [&](double u, double v) {
       return Point2{mx + u * ux - v * uy, my + u * uy + v * ux};
     };
@@ -291,11 +295,13 @@ namespace roofer::reconstruction {
    * Per point, whether it stands above the roof beside it: a point of
    * another plane (`labels` > 0) within `beside` lies more than `epsilon`
    * lower, and none more than `epsilon` higher. A wall's top, a parapet
-   * stand; a facade under the eaves does not.
+   * stand; a facade under the eaves does not. Planes in `steep` don't count as
+   * the roof below: their step edges and upper faces are no walls.
    */
   template <typename Points>
   std::vector<bool> standing(const Points& pts, const std::vector<int>& labels,
-                             double beside, double epsilon) {
+                             double beside, double epsilon,
+                             const std::set<int>& steep = {}) {
     auto cell = [&](double x, double y) {
       return std::array<long long, 2>{(long long)std::floor(x / beside),
                                       (long long)std::floor(y / beside)};
@@ -317,7 +323,8 @@ namespace roofer::reconstruction {
                     beside)
               continue;
             double h = pts[i][2] - pts[j][2];
-            lower |= h > epsilon, higher |= h < -epsilon;
+            lower |= h > epsilon && !steep.count(labels[j]);
+            higher |= h < -epsilon;
           }
         }
       out[i] = lower && !higher;
@@ -361,6 +368,39 @@ namespace roofer::reconstruction {
     for (int i : {1, 2}) r[i] = {r[i][0] + a * ux, r[i][1] + a * uy};
     for (int i : {0, 3}) r[i] = {r[i][0] - b * ux, r[i][1] - b * uy};
     return r;
+  }
+
+  /**
+   * Whether `r` lies on the flank of a broader ridge: across it, the median
+   * height of all points `pts` in bands r/2 apart rises on one side about as
+   * much as it falls on the other (both by more than `step`, the larger less
+   * than twice the smaller). A wall stands over the roof on one side at least.
+   */
+  template <typename Points>
+  bool narrow_on_flank(const Points& pts, const Rectangle& r,
+                       double alpha_radius, double step) {
+    double ux = r[1][0] - r[0][0], uy = r[1][1] - r[0][1],
+           l = std::hypot(ux, uy), bin = alpha_radius / 2;
+    ux /= l, uy /= l;
+    Point2 c{(r[0][0] + r[3][0]) / 2, (r[0][1] + r[3][1]) / 2};
+    std::array<std::vector<double>, 3> band;
+    for (const auto& p : pts) {
+      double dx = p[0] - c[0], dy = p[1] - c[1], u = dx * ux + dy * uy,
+             v = -dx * uy + dy * ux;
+      if (u >= 0 && u <= l && std::abs(v) < 3 * bin)
+        band[v < -bin ? 0 : v < bin ? 1 : 2].push_back(p[2]);
+    }
+    for (auto& z : band)
+      if (z.empty()) return false;
+    auto median = [](std::vector<double>& z) {
+      std::nth_element(z.begin(), z.begin() + z.size() / 2, z.end());
+      return z[z.size() / 2];
+    };
+    double top = median(band[1]), rise = std::abs(top - median(band[0])),
+           on = std::abs(median(band[2]) - top);
+    return (top - median(band[0])) * (median(band[2]) - top) > 0 &&
+           std::min(rise, on) > step &&
+           std::max(rise, on) < 2 * std::min(rise, on);
   }
 
   // Whether (x, y) lies in `r`, within `margin`.

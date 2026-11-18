@@ -87,7 +87,10 @@ namespace roofer::reconstruction {
   X(bool, narrow_planes, false,                                                \
     "Detect narrow structures (walls, parapets) standing in what the plane "   \
     "detector left and outline them as rectangles.",                           \
-    config::no_validation<bool>(), public_)
+    config::no_validation<bool>(), public_)                                    \
+  X(float, narrow_max_slope, 10.0F,                                            \
+    "Steepest roof plane, in degrees, a narrow structure stands on.",          \
+    config::greater_than(0.0F), public_)
 
   struct PlaneDetectorConfig {
     using Self = PlaneDetectorConfig;
