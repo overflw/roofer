@@ -83,7 +83,11 @@ namespace roofer::reconstruction {
   X(bool, regularise_axis_symmetry, false, "Regularise plane symmetry.",       \
     config::no_validation<bool>(), public_)                                    \
   X(int, max_plane_count, 900, "Maximum detected planes before aborting.",     \
-    config::greater_than(0), public_)
+    config::greater_than(0), public_)                                          \
+  X(bool, narrow_planes, false,                                                \
+    "Detect narrow structures (walls, parapets) standing in what the plane "   \
+    "detector left and outline them as rectangles.",                           \
+    config::no_validation<bool>(), public_)
 
   struct PlaneDetectorConfig {
     using Self = PlaneDetectorConfig;
