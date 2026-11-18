@@ -111,3 +111,34 @@ TEST_CASE("a short structure's lines run on no farther than it is long") {
   CHECK(edges[0][0][0] == Catch::Approx(2));
   CHECK(edges[0][1][0] == Catch::Approx(8));
 }
+
+TEST_CASE("nothing stands on a steep roof plane") {
+  std::vector<std::array<double, 3>> pts;
+  std::vector<int> labels;
+  roof([](double x, double) { return std::abs(x - 8) < 0.2 ? 0.6 : 0.0; }, pts,
+       labels);
+  auto stands = standing(pts, labels, 2 * r, epsilon, {1});
+  for (size_t i = 0; i < pts.size(); ++i) CHECK_FALSE(stands[i]);
+}
+
+TEST_CASE("points on one line make a rectangle with a width") {
+  std::vector<Point2> xy;
+  for (double x = 0; x < 5; x += 0.25) xy.push_back({x, 2});
+  auto o = narrow_outline(xy, r);
+  REQUIRE(o);
+  CHECK(std::hypot((*o)[3][0] - (*o)[0][0], (*o)[3][1] - (*o)[0][1]) ==
+        Catch::Approx(r / 10));
+}
+
+TEST_CASE("a line on a ridge's flank is no wall, a wall on a flat roof is") {
+  Rectangle line{Point2{2, 4.9}, Point2{18, 4.9}, Point2{18, 5.1},
+                 Point2{2, 5.1}};
+  std::vector<std::array<double, 3>> flank, wall;
+  for (double x = 0.125; x < 20; x += 0.25)
+    for (double y = 0.125; y < 10; y += 0.25) {
+      flank.push_back({x, y, 10 + 0.8 * y});
+      wall.push_back({x, y, std::abs(y - 5) < 0.2 ? 10.6 : 10.0});
+    }
+  CHECK(narrow_on_flank(flank, line, r, epsilon));
+  CHECK_FALSE(narrow_on_flank(wall, line, r, epsilon));
+}

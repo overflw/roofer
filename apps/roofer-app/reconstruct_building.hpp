@@ -436,8 +436,14 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
         for (auto& l : labels)
           if (l == k) l = 0;
       };
+      std::set<int> steep;
+      for (auto& [k, v] : planes)
+        if (std::abs(v.first.c()) <
+            std::cos(pd.narrow_max_slope * M_PI / 180) *
+                std::hypot(v.first.a(), v.first.b(), v.first.c()))
+          steep.insert(k);
       auto stands = roofer::reconstruction::standing(
-          pts, labels, 2 * alpha_radius, pd.plane_epsilon);
+          pts, labels, 2 * alpha_radius, pd.plane_epsilon, steep);
       std::map<int, std::array<size_t, 2>> standing;
       for (size_t i = 0; i < labels.size(); ++i)
         if (labels[i] > 0) {
@@ -452,8 +458,9 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
                            const std::vector<size_t>& run) {
         std::vector<roofer::reconstruction::Point2> xy;
         for (auto i : run) xy.push_back({xyz[i][0], xyz[i][1]});
-        return roofer::reconstruction::narrow_outline(xy, alpha_radius)
-            .has_value();
+        auto o = roofer::reconstruction::narrow_outline(xy, alpha_radius);
+        return o && !roofer::reconstruction::narrow_on_flank(
+                        pts, *o, alpha_radius, pd.plane_epsilon);
       };
       // the narrow runs of a plane standing on the roof, the tops of walls of
       // one height, go to the loose points; the plane keeps the rest, if enough
