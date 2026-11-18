@@ -255,10 +255,13 @@ namespace roofer::reconstruction {
           arrangementface_to_polygon(face, polygon);
           auto height_points = heightfield.rasterise_polygon(polygon, false);
 
-          for (auto& [plane, plane_id] : points_per_plane) {
-            double volume =
-                cfg.data_weight() * cell_area *
-                volume_to_plane(plane, height_points, cfg.max_data_distance);
+          for (size_t i = 0; i < points_per_plane.size(); ++i) {
+            auto& [plane, plane_id] = points_per_plane[i];
+            // ground keeps its full cost, or roof faces fall to the ground
+            double max_distance =
+                i < roofplane_cnt ? cfg.max_data_distance : 0;
+            double volume = cfg.data_weight() * cell_area *
+                            volume_to_plane(plane, height_points, max_distance);
             face->data().vertex_label_cost.push_back(volume);
             max_cost = std::max(max_cost, volume);
           }
