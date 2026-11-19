@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Arrangement snapping no longer gives a roof face the label of a sliver hole that collapses inside it: a region whose label seeds disagree takes the label covering most of its area.
 - The CityJSON writer's building `geographicalExtent` now covers its footprint and every part, instead of zeros for a footprint that isn't reconstructed and only the last part otherwise. Fixes #188 via #189.
 - `line-detector.snap-threshold` now acts as a distance in metres, as documented. It was compared with a squared distance, so results change for configs with a non-default `snap-threshold` or `unit-scale`.
+- Two adjacent roof planes whose points don't overlap along their intersection line no longer produce an intersection segment. The segment spanned the gap between the two extents, where neither plane has points, and entered line regularisation with the priority of a real intersection.
 
 ### Changed
 
