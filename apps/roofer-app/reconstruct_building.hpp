@@ -588,6 +588,27 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
         labels = labels0;
         planes = planes0;
         PlaneDetector->plane_adjacencies = adjacencies0;
+      } else {
+        // points left in no narrow structure go back to their plane
+        std::set<int> back;
+        for (size_t i = 0; i < labels.size(); ++i)
+          if (labels[i] == 0 && labels0[i] > 0 && planes0.count(labels0[i]))
+            labels[i] = labels0[i], back.insert(labels0[i]);
+        auto& adjacencies = PlaneDetector->plane_adjacencies;
+        for (auto k : back) {
+          bool dropped = !planes.count(k);
+          planes[k].first = planes0.at(k).first;
+          auto& kept = planes[k].second;
+          kept.clear();
+          for (size_t i = 0; i < labels.size(); ++i)
+            if (labels[i] == k)
+              kept.emplace_back(pts[i][0], pts[i][1], pts[i][2]);
+          if (!dropped) continue;
+          if (adjacencies0.count(k)) adjacencies[k] = adjacencies0.at(k);
+          for (auto& [l, adjacent] : adjacencies0)
+            if (adjacent.count(k) && planes.count(l))
+              adjacencies[l][k] = adjacent.at(k);
+        }
       }
       timings["NarrowPlanes"] = std::chrono::high_resolution_clock::now() - t0;
     }
