@@ -371,14 +371,13 @@ namespace roofer::reconstruction {
   }
 
   /**
-   * Whether `r` lies on the flank of a broader ridge: across it, the median
-   * height of all points `pts` in bands r/2 apart rises on one side about as
-   * much as it falls on the other (both by more than `step`, the larger less
-   * than twice the smaller). A wall stands over the roof on one side at least.
+   * The median height of all points `pts` across `r` in three bands r/2
+   * apart: beside it on one side, on it, beside it on the other side; NaN
+   * for a band without points.
    */
   template <typename Points>
-  bool narrow_on_flank(const Points& pts, const Rectangle& r,
-                       double alpha_radius, double step) {
+  std::array<double, 3> narrow_profile(const Points& pts, const Rectangle& r,
+                                       double alpha_radius) {
     double ux = r[1][0] - r[0][0], uy = r[1][1] - r[0][1],
            l = std::hypot(ux, uy), bin = alpha_radius / 2;
     ux /= l, uy /= l;
@@ -390,17 +389,31 @@ namespace roofer::reconstruction {
       if (u >= 0 && u <= l && std::abs(v) < 3 * bin)
         band[v < -bin ? 0 : v < bin ? 1 : 2].push_back(p[2]);
     }
-    for (auto& z : band)
-      if (z.empty()) return false;
-    auto median = [](std::vector<double>& z) {
+    std::array<double, 3> m;
+    for (int i = 0; i < 3; ++i) {
+      auto& z = band[i];
+      if (z.empty()) {
+        m[i] = NAN;
+        continue;
+      }
       std::nth_element(z.begin(), z.begin() + z.size() / 2, z.end());
-      return z[z.size() / 2];
-    };
-    double top = median(band[1]), rise = std::abs(top - median(band[0])),
-           on = std::abs(median(band[2]) - top);
-    return (top - median(band[0])) * (median(band[2]) - top) > 0 &&
-           std::min(rise, on) > step &&
-           std::max(rise, on) < 2 * std::min(rise, on);
+      m[i] = z[z.size() / 2];
+    }
+    return m;
+  }
+
+  /**
+   * Whether a profile (`narrow_profile`) lies on the flank of a broader
+   * ridge: across it, the roof rises on one side about as much as it falls
+   * on the other (both by more than `step`, the larger less than twice the
+   * smaller). A wall stands over the roof on one side at least.
+   */
+  inline bool narrow_on_flank(const std::array<double, 3>& m, double step) {
+    double rise = m[1] - m[0], on = m[2] - m[1];
+    if (std::isnan(rise) || std::isnan(on)) return false;
+    return rise * on > 0 && std::min(std::abs(rise), std::abs(on)) > step &&
+           std::max(std::abs(rise), std::abs(on)) <
+               2 * std::min(std::abs(rise), std::abs(on));
   }
 
   // Whether (x, y) lies in `r`, within `margin`.
