@@ -19,6 +19,9 @@
 // Author(s):
 // Ravi Peters
 
+#include <cmath>
+#include <unordered_set>
+
 #include <roofer/reconstruction/ArrangementBase.hpp>
 #include <roofer/reconstruction/ArrangementExtruder.hpp>
 #include "ExtrusionArrangement.hpp"
@@ -34,22 +37,17 @@ namespace roofer::reconstruction {
             float(CGAL::to_double(p->z()))};
   }
 
-  typedef std::pair<float, Face_handle> hf_pair;
   template <typename T>
   void push_ccb(
       T& ring, Halfedge_handle hedge,
-      std::unordered_map<Vertex_handle, std::vector<hf_pair>>& vertex_columns,
+      const detail::VertexColumns& vertex_columns,
       std::unordered_map<Halfedge_handle, EPECK::Point_3>& extra_wall_points) {
     auto first = hedge;
     do {
       auto v = hedge->source();
       if (CGAL::squared_distance(v->point(), hedge->target()->point()) > 0) {
-        for (auto& [h, f_h] : vertex_columns[v]) {
-          if (f_h == hedge->face()) {
-            ring.push_back(detail::lifted(v->point(), h));
-            break;
-          }
-        }
+        ring.push_back(detail::lifted(
+            v->point(), vertex_columns.at(v).height(hedge->face())));
         auto p_xtra = extra_wall_points.find(hedge);
         auto q_xtra = extra_wall_points.find(hedge->twin());
         if (p_xtra != extra_wall_points.end()) {
@@ -124,13 +122,33 @@ namespace roofer::reconstruction {
         return;
       }
 
+      // Choose one height for the whole flat roof, including over uneven
+      // terrain.
+      std::unordered_set<Face_handle> use_p97;
+      if (!cfg.lod2 && !cfg.lod1_extrude_to_max) {
+        for (auto face : arr.face_handles()) {
+          const auto& data = face->data();
+          if (!data.in_footprint || !data.segid || face->is_unbounded() ||
+              !std::isfinite(data.elevation_97p) ||
+              !(data.elevation_97p > data.elevation_70p))
+            continue;
+          const float floor =
+              elevation_provider.get_max_elevation(arr_face_polygon(face));
+          const float minimum_roof_height = floor + snap_tolerance;
+          if (data.elevation_70p <= minimum_roof_height &&
+              data.elevation_97p > minimum_roof_height)
+            use_p97.insert(face);
+        }
+      }
+
       // compute all heights for each vertex
-      std::unordered_map<Vertex_handle, std::vector<hf_pair>> vertex_columns;
+      detail::VertexColumns vertex_columns;
       for (auto& v : arr.vertex_handles()) {
+        if (v->is_isolated()) continue;
         auto& p = v->point();
         auto he = v->incident_halfedges();
         auto first = he;
-        std::vector<hf_pair> heights;
+        auto& column = vertex_columns[v];
         do {
           auto f = he->face();
           float h;
@@ -138,7 +156,7 @@ namespace roofer::reconstruction {
             if (cfg.lod2) {
               h = plane_height(f->data().plane, p);
             } else {
-              if (cfg.lod1_extrude_to_max)
+              if (cfg.lod1_extrude_to_max || use_p97.contains(f))
                 h = f->data().elevation_97p;
               else
                 h = f->data().elevation_70p;
@@ -148,30 +166,13 @@ namespace roofer::reconstruction {
           } else {
             h = elevation_provider.get(p);
           }
-          heights.push_back(std::make_pair(h, f));
+          column.heights.emplace_back(h, f);
         } while (++he != first);
-
-        if (heights.size() == 0) continue;
-
-        // sort heights
-        std::sort(heights.begin(), heights.end(),
-                  [](hf_pair& a, hf_pair& b) { return a.first < b.first; });
-        // equalise heights that are practically the same
-        float h_ref = heights[0].first;
-        for (auto& [h, face] : heights) {
-          if (std::fabs(h_ref - h) < snap_tolerance) {
-            h = h_ref;
-          }
-          h_ref = h;
-        }
-
-        vertex_columns[v] = heights;
+        column.snap(snap_tolerance);
       }
 
       const auto roof_height = [&](Vertex_handle vertex, Face_handle face) {
-        for (const auto& [height, candidate] : vertex_columns.at(vertex))
-          if (candidate == face) return height;
-        throw rooferException("Missing roof vertex height");
+        return vertex_columns.at(vertex).height(face);
       };
 
       // Roof profiles may cross along a step. Keep that intersection in both
@@ -198,19 +199,8 @@ namespace roofer::reconstruction {
             else
               walls.add(p, q, ha, hb, b->data().part_id, 3);
           };
-          if ((h1a < h1b && h2a > h2b) || (h1a > h1b && h2a < h2b)) {
-            const auto line_a =
-                EPECK::Line_3(EPECK::Point_3(p1.x(), p1.y(), h1a),
-                              EPECK::Point_3(p2.x(), p2.y(), h2a));
-            const auto line_b =
-                EPECK::Line_3(EPECK::Point_3(p1.x(), p1.y(), h1b),
-                              EPECK::Point_3(p2.x(), p2.y(), h2b));
-            const auto intersection = CGAL::intersection(line_a, line_b);
-            const auto* point =
-                intersection ? std::get_if<EPECK::Point_3>(&*intersection)
-                             : nullptr;
-            if (!point)
-              throw rooferException("Invalid intersection point in Extruder");
+          if (auto point =
+                  detail::profile_crossing(p1, p2, {h1a, h2a}, {h1b, h2b})) {
             extra_wall_points[edge] = *point;
             const Point_2 crossing(point->x(), point->y());
             const float z = float(CGAL::to_double(point->z()));

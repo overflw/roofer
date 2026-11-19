@@ -109,16 +109,7 @@ target_link_libraries("test_vector_reader" PRIVATE roofer-extra)
 add_executable("test_terrain" "${CMAKE_CURRENT_SOURCE_DIR}/test_terrain.cpp")
 target_link_libraries("test_terrain" PRIVATE Catch2::Catch2WithMain
                                              roofer-extra)
-
-# TODO: refactor config helpers so that we can depend without the githash
-if(RF_GIT_HASH)
-  target_compile_definitions("test_terrain" PRIVATE RF_GIT_HASH="${RF_GIT_HASH}")
-else()
-  target_include_directories("test_terrain" PRIVATE ${CMAKE_BINARY_DIR})
-  if(TARGET update_git_hash)
-    add_dependencies("test_terrain" update_git_hash)
-  endif()
-endif()
+target_compile_definitions("test_terrain" PRIVATE RF_GIT_HASH="test")
 catch_discover_tests("test_terrain")
 
 add_executable(test_triangulation_boundary test_triangulation_boundary.cpp)
@@ -241,6 +232,10 @@ endif()
 add_executable(test_line_angle_clustering test_line_angle_clustering.cpp)
 target_link_libraries(test_line_angle_clustering PRIVATE Catch2::Catch2WithMain roofer-core)
 catch_discover_tests(test_line_angle_clustering)
+
+add_executable(test_plane_intersector test_plane_intersector.cpp)
+target_link_libraries(test_plane_intersector PRIVATE Catch2::Catch2WithMain roofer-core)
+catch_discover_tests(test_plane_intersector)
 
 add_executable(test_line_detector test_line_detector.cpp)
 target_link_libraries(test_line_detector PRIVATE Catch2::Catch2WithMain roofer-core)
