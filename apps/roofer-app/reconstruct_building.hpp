@@ -574,8 +574,12 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
           return roofer::reconstruction::to_border(rings, p[0], p[1]) >
                  2 * alpha_radius;
         };
-        if (std::hypot(r[1][0] - r[0][0], r[1][1] - r[0][1]) <
-                4 * alpha_radius ||
+        double length = std::hypot(r[1][0] - r[0][0], r[1][1] - r[0][1]);
+        auto m = roofer::reconstruction::narrow_profile(pts, r, alpha_radius);
+        bool isolated = inside(r[0]) && inside(r[1]) &&
+                        !(std::abs(m[0] - m[2]) > pd.narrow_min_height);
+        if (length < 4 * alpha_radius ||
+            (isolated && length < pd.narrow_min_length) ||
             !(inside(mid(0, 2)) || inside(mid(0, 3)) || inside(mid(1, 2))))
           short_or_on_border.push_back(k);
       }

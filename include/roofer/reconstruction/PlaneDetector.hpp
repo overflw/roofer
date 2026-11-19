@@ -94,6 +94,10 @@ namespace roofer::reconstruction {
   X(float, narrow_min_height, 0.5F,                                            \
     "Least height, in metres, a narrow structure stands over the roof beside " \
     "it.",                                                                     \
+    config::greater_than(0.0F), public_)                                       \
+  X(float, narrow_min_length, 4.0F,                                            \
+    "Least length, in metres, of a narrow structure away from the footprint "  \
+    "and with roof of one height on both sides.",                              \
     config::greater_than(0.0F), public_)
 
   struct PlaneDetectorConfig {
