@@ -1,25 +1,28 @@
 #include <catch2/catch_test_macros.hpp>
-#include <roofer/reconstruction/LineDetectorBase.hpp>
+#include <roofer/reconstruction/LineDetector.hpp>
 
-#include <set>
-
-using namespace roofer::linedect;
-
-static std::set<size_t> segments(const LineDetector& ld) {
-  return {ld.point_segment_idx.begin(), ld.point_segment_idx.end()};
-}
-
-TEST_CASE("the line detector uses the given number of neighbours",
+TEST_CASE("the line detector uses the configured neighbour count",
           "[line_detector]") {
-  // two collinear runs of 5 points, 1 m apart: 5 neighbours (the point
-  // itself included) don't reach across the gap, 10 do
-  std::vector<Point> pts;
-  for (double x : {0.0, 0.1, 0.2, 0.3, 0.4, 1.4, 1.5, 1.6, 1.7, 1.8})
-    pts.emplace_back(x, 0, 0);
-  for (auto [n, expected] : {std::pair{5, 2}, std::pair{10, 1}}) {
-    auto copy = pts;
-    LineDetector ld(copy, n);
-    ld.detect();
-    CHECK(segments(ld).size() == size_t(expected));
-  }
+  using namespace roofer;
+  using namespace roofer::reconstruction;
+
+  // The bottom edge is two collinear runs of 5 points, 1 m apart: 5
+  // neighbours (the point itself included) don't reach across the gap and
+  // find two lines there, 10 find one.
+  LinearRing ring;
+  for (float x : {0.0f, 0.1f, 0.2f, 0.3f, 0.4f, 1.4f, 1.5f, 1.6f, 1.7f, 1.8f})
+    ring.push_back({x, 0, 0});
+  for (float x = 1.8f; x > -0.05f; x -= 0.1f) ring.push_back({x, 2, 0});
+  const IndexedPlanesWithPoints planes{{1, {Plane(0, 0, 1, 0), {}}}};
+
+  auto line_count = [&](int neighbour_count) {
+    LineDetectorConfig config;
+    config.neighbour_count = neighbour_count;
+    config.perform_chaining = false;
+    auto detector = createLineDetector();
+    detector->detect({ring}, {1}, planes, config);
+    return detector->edge_segments.size();
+  };
+  CHECK(line_count(5) == 3);
+  CHECK(line_count(10) == 2);
 }
