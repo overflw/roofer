@@ -139,6 +139,8 @@ TEST_CASE("a line on a ridge's flank is no wall, a wall on a flat roof is") {
       flank.push_back({x, y, 10 + 0.8 * y});
       wall.push_back({x, y, std::abs(y - 5) < 0.2 ? 10.6 : 10.0});
     }
-  CHECK(narrow_on_flank(flank, line, r, epsilon));
-  CHECK_FALSE(narrow_on_flank(wall, line, r, epsilon));
+  CHECK(narrow_on_flank(narrow_profile(flank, line, r), epsilon));
+  CHECK_FALSE(narrow_on_flank(narrow_profile(wall, line, r), epsilon));
+  auto m = narrow_profile(wall, line, r);
+  CHECK(m[1] - std::fmax(m[0], m[2]) == Catch::Approx(0.6));
 }

@@ -90,6 +90,10 @@ namespace roofer::reconstruction {
     config::no_validation<bool>(), public_)                                    \
   X(float, narrow_max_slope, 10.0F,                                            \
     "Steepest roof plane, in degrees, a narrow structure stands on.",          \
+    config::greater_than(0.0F), public_)                                       \
+  X(float, narrow_min_height, 0.5F,                                            \
+    "Least height, in metres, a narrow structure stands over the roof beside " \
+    "it.",                                                                     \
     config::greater_than(0.0F), public_)
 
   struct PlaneDetectorConfig {

@@ -459,12 +459,17 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
         std::vector<roofer::reconstruction::Point2> xy;
         for (auto i : run) xy.push_back({xyz[i][0], xyz[i][1]});
         auto o = roofer::reconstruction::narrow_outline(xy, alpha_radius);
-        return o && !roofer::reconstruction::narrow_on_flank(
-                        pts, *o, alpha_radius, pd.plane_epsilon);
+        if (!o) return false;
+        auto m = roofer::reconstruction::narrow_profile(pts, *o, alpha_radius);
+        return m[1] - std::fmax(m[0], m[2]) >= pd.narrow_min_height &&
+               !roofer::reconstruction::narrow_on_flank(m, pd.plane_epsilon);
       };
       // the narrow runs of a plane standing on the roof, the tops of walls of
       // one height, go to the loose points; the plane keeps the rest, if enough
       std::vector<bool> released(labels.size(), false);
+      const auto labels0 = labels;
+      const auto planes0 = planes;
+      const auto adjacencies0 = PlaneDetector->plane_adjacencies;
       for (auto& [k, s] : standing) {
         if (2 * s[0] <= s[1]) continue;
         std::vector<size_t> index;
@@ -575,6 +580,11 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
           short_or_on_border.push_back(k);
       }
       for (auto k : short_or_on_border) drop(k);
+      if (narrow.empty()) {
+        labels = labels0;
+        planes = planes0;
+        PlaneDetector->plane_adjacencies = adjacencies0;
+      }
       timings["NarrowPlanes"] = std::chrono::high_resolution_clock::now() - t0;
     }
 
