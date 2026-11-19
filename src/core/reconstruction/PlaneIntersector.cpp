@@ -95,6 +95,8 @@ namespace roofer::reconstruction {
                   !get_line_extend(l, plane_pts_lo, dmin_lo, dmax_lo, pmin_lo,
                                    pmax_lo, min_dist_to_line_sq))
                 continue;
+              if (std::max(dmin_lo, dmin_hi) >= std::min(dmax_lo, dmax_hi))
+                continue;
 
               // take the overlap between the two extends
               Point ppmin, ppmax;
