@@ -1,0 +1,2 @@
+[reconstruction.plane-detector]
+merge-coplanar = true

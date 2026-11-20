@@ -1,0 +1,5 @@
+[reconstruction.plane-detector]
+merge-coplanar = true
+merge-rms-factor = 1.1
+merge-rms-offset = 0.01
+merge-max-angle = 5.0
