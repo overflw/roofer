@@ -240,3 +240,7 @@ catch_discover_tests(test_plane_intersector)
 add_executable(test_line_detector test_line_detector.cpp)
 target_link_libraries(test_line_detector PRIVATE Catch2::Catch2WithMain roofer-core)
 catch_discover_tests(test_line_detector)
+
+add_executable(test_external_lines test_external_lines.cpp)
+target_link_libraries(test_external_lines PRIVATE Catch2::Catch2WithMain roofer-extra)
+catch_discover_tests(test_external_lines)
