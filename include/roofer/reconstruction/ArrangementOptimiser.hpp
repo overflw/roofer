@@ -38,6 +38,10 @@ namespace roofer::reconstruction {
     config::no_validation<bool>(), internal)                              \
   X(int, graph_cut_impl, 0, "Graph-cut implementation selector.",         \
     config::at_least(0), internal)                                        \
+  X(float, max_data_distance, 0.0F,                                       \
+    "Cap on the height difference per cell in the data cost, in metres "  \
+    "(0 disables the cap).",                                              \
+    config::at_least(0.0F), public_)                                      \
   X(bool, label_ground_outside_footprint, true,                           \
     "Label ground outside the footprint.", config::no_validation<bool>(), \
     internal)                                                             \

@@ -185,12 +185,19 @@ namespace roofer::reconstruction {
     }
     return CGAL::sqrt(dist_sum / points.size());
   }
-  inline double volume_to_plane(Plane& plane, vec3f& points) {
+  // Sum of the vertical distances from the points to the plane. With
+  // max_distance > 0 each distance is capped at max_distance, so that cells far
+  // off the plane (another roof plane, a superstructure, vegetation) count as
+  // outliers of fixed cost instead of in proportion to their height.
+  inline double volume_to_plane(Plane& plane, vec3f& points,
+                                double max_distance = 0) {
     double volume = 0;
     for (auto& p : points) {
-      volume += std::abs(p[2] - (-plane.a() / plane.c() * p[0] -
-                                 plane.b() / plane.c() * p[1] -
-                                 plane.d() / plane.c()));
+      double d = std::abs(p[2] - (-plane.a() / plane.c() * p[0] -
+                                  plane.b() / plane.c() * p[1] -
+                                  plane.d() / plane.c()));
+      if (max_distance > 0) d = std::min(d, max_distance);
+      volume += d;
     }
     return volume;
   }
@@ -248,9 +255,13 @@ namespace roofer::reconstruction {
           arrangementface_to_polygon(face, polygon);
           auto height_points = heightfield.rasterise_polygon(polygon, false);
 
-          for (auto& [plane, plane_id] : points_per_plane) {
+          for (size_t i = 0; i < points_per_plane.size(); ++i) {
+            auto& [plane, plane_id] = points_per_plane[i];
+            // ground keeps its full cost, or roof faces fall to the ground
+            double max_distance =
+                i < roofplane_cnt ? cfg.max_data_distance : 0;
             double volume = cfg.data_weight() * cell_area *
-                            volume_to_plane(plane, height_points);
+                            volume_to_plane(plane, height_points, max_distance);
             face->data().vertex_label_cost.push_back(volume);
             max_cost = std::max(max_cost, volume);
           }
