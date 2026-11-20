@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Arrangement snapping no longer gives a roof face the label of a sliver hole that collapses inside it: a region whose label seeds disagree takes the label covering most of its area.
 - The CityJSON writer's building `geographicalExtent` now covers its footprint and every part, instead of zeros for a footprint that isn't reconstructed and only the last part otherwise. Fixes #188 via #189.
 - `line-detector.snap-threshold` now acts as a distance in metres, as documented. It was compared with a squared distance, so results change for configs with a non-default `snap-threshold` or `unit-scale`.
+- `line-detector.neighbour-count` now takes effect. The line detector built its neighbourhoods before the option was applied and always used 5 neighbours; the default is now 5, so results only change for configs that set the option.
 - The roofer app no longer hangs at the end of a run once in a while. The cropper, reconstructor and sorter set their "finished" flags without holding the mutex the next stage waits on, so the wake-up could be lost and that stage waited forever, after all output was written.
 
 ### Changed
