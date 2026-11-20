@@ -116,6 +116,10 @@ add_executable(test_triangulation_boundary test_triangulation_boundary.cpp)
 target_link_libraries(test_triangulation_boundary PRIVATE Catch2::Catch2WithMain roofer-core)
 catch_discover_tests(test_triangulation_boundary)
 
+add_executable(test_plane_merge test_plane_merge.cpp)
+target_link_libraries(test_plane_merge PRIVATE Catch2::Catch2WithMain roofer-core)
+catch_discover_tests(test_plane_merge)
+
 add_executable(test_polygon_snapper test_polygon_snapper.cpp)
 target_link_libraries(test_polygon_snapper PRIVATE Catch2::Catch2WithMain roofer-core)
 catch_discover_tests(test_polygon_snapper)
