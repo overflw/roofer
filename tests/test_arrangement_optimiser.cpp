@@ -53,11 +53,10 @@ namespace {
   }
 }  // namespace
 
-// The top right quadrant gains 25 * 0.2 = 5 data cost per unit of data weight
-// on plane 2 and pays its 10 m of inner edges in smoothness. Each shared edge
-// weighs twice its length (each direction once), so the quadrant goes to
-// plane 2 when 5 * data_weight > 20 * smoothness_weight, at complexity factor
-// 0.8. At 0.75 a single-counted edge would flip it to plane 2.
+// The top right quadrant saves 0.2 data cost per cell on plane 2 and pays its
+// 10 m of inner edges in smoothness, each metre counted twice (once per
+// direction). That puts its switch to plane 2 between complexity factors 0.75
+// and 0.85; counting each edge once would move it below 0.75.
 TEST_CASE("graph cut weighs a shared edge twice its length") {
   CHECK(top_right_segid(0.75F) == 1);
   CHECK(top_right_segid(0.85F) == 2);
