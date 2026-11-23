@@ -9,7 +9,7 @@ namespace {
   // A 10 x 10 footprint split into four 5 x 5 quadrants. The heightfield lies
   // on plane 1 (z = 10) except for the top right quadrant at z = 10.6, which
   // fits plane 2 (z = 11) slightly better.
-  size_t top_right_segid(float complexity_factor) {
+  int top_right_segid(float complexity_factor) {
     roofer::Arrangement_2 arr;
     for (auto [a, b] : {std::pair{Point_2(0, 0), Point_2(10, 0)},
                         {Point_2(10, 0), Point_2(10, 10)},
