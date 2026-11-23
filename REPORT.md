@@ -2,6 +2,24 @@
 
 Date: 2026-11-17. Fork `overflw/roofer`; base is `main` at `5a6c794` (includes the Eigen fix from #193/#194).
 
+## Update 2026-11-18: measured in r2c (38 German tiles: 30 ALS, 8 bDOM)
+
+r2c ran its production pipeline, scored on hold-out points against r2c main. The sandbox results below did **not** carry over:
+
+- **#2 data-cost cap: rejected.**
+  - The original version also capped the ground label. A roof face whose best plane missed it by more than the cap then cost as much as ground and turned into a hole in the roof. This was fixed in e9c915f (only roof planes are capped).
+  - Cap 1.0 with ground uncapped: usable +888 m², but the 95 % CI [−381, 2092] spans 0; bad_m2 −683, off_m2 +751, missed_m2 +168, 14 buildings lose roof area.
+  - Holes still occur by another path (e.g. bb `DEBBAL660002yYzuBL`, one gable slope lost).
+  - Losses where one plane leans across two (sawtooth roofs, hip ends) and where small dormer or ledge faces are dropped.
+- **#1 coplanar merge: rejected.**
+  - Usable −1600 m² [−3553, −158], off_m2 +1194; sawtooth roofs −826 m².
+  - The RMS-ratio rule joins faces that r2c's per-face rule keeps apart. That rule requires each face to keep its own fit on the merged plane.
+  - It also segfaulted on buildings with too few points for region growing. Fixed in 722fdef.
+  - Worth trying instead: a merge using r2c's per-face rule that also snaps the neighbours onto the merged plane.
+- **#3 and #4 (bug fixes): merged.**
+
+**Lesson.** The US QL1 test areas and roofprint outlines did not predict the German result. Neither the sawtooth/hip-end failure nor the roof holes showed up there. The "Recommended r2c trial" below is superseded. The graph-cut robustness item (ranked item 3) remains open.
+
 ## TL;DR
 
 - roofer builds from source with the Nix dev shell. Eigen is linked, so CGAL does not fall back to Diagonalize_traits. 147 of 153 tests pass; the other 6 need test data from `data.3dgi.xyz`, which the sandbox proxy blocks.
