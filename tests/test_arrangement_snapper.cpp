@@ -557,7 +557,7 @@ TEST_CASE("snapper rejects a non-finite exterior height") {
                                  .manifold_height_tolerance = 1e-4F}));
 }
 
-TEST_CASE("snapper keeps the outer labels of two edges a collapse merges") {
+TEST_CASE("snapper keeps the outer labels of the edges a collapse merges") {
   // Collapsing v1-v2 (or v1-v3-v2) merges the edges to p, which removes the
   // slivers between them. With q, it also rebuilds the triangle v1-q-p from
   // new faces only.
@@ -600,7 +600,7 @@ TEST_CASE("snapper keeps the outer labels of two edges a collapse merges") {
         };
         set_roof(Point_2(1, 1), 1);
         if (with_q) set_roof(inside_small, 2);
-        set_roof(CGAL::centroid(v1, v2, p), 3);
+        set_roof(CGAL::centroid(v3, v2, p), 3);
         if (with_v3) {
           set_roof(CGAL::centroid(v1, v3, p), 4);
           set_roof(CGAL::centroid(v1, v2, v3), 5);
