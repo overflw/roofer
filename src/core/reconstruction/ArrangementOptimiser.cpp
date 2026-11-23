@@ -281,9 +281,9 @@ namespace roofer::reconstruction {
         return;
       }
 
-      // compute edge_weights (smoothness term). One halfedge per edge: the
-      // graph cut links its two faces both ways. Twice the edge length keeps
-      // the balance with the data term that passing both halfedges gave.
+      // compute edge_weights (smoothness term). The graph cut links an edge's
+      // faces both ways, so each edge is passed once at 2*l, the same as both
+      // halfedges at l. max_weight stays l so normalising is unchanged.
       double max_weight = 0;
       std::vector<Halfedge_handle> edges;
       for (auto edge : arr.edge_handles()) {
