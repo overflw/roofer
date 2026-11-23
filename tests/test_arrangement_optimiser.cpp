@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <CGAL/Arr_walk_along_line_point_location.h>
+
 #include <roofer/reconstruction/ArrangementOptimiser.hpp>
 
 namespace {
@@ -39,17 +41,11 @@ namespace {
         arr, heightfield, roof_planes, {},
         {.complexity_factor = complexity_factor, .use_ground = false});
 
-    for (auto face : arr.face_handles()) {
-      if (face->is_unbounded()) continue;
-      bool top_right = true;
-      auto he = face->outer_ccb();
-      do {
-        top_right &= he->source()->point().x() >= 5 &&
-                     he->source()->point().y() >= 5;
-      } while (++he != face->outer_ccb());
-      if (top_right) return face->data().segid;
-    }
-    return 0;
+    auto located =
+        CGAL::Arr_walk_along_line_point_location(arr).locate(Point_2(7.5, 7.5));
+    auto face = std::get_if<roofer::Arrangement_2::Face_const_handle>(&located);
+    REQUIRE(face != nullptr);
+    return (*face)->data().segid;
   }
 }  // namespace
 
