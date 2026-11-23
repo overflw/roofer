@@ -1138,9 +1138,22 @@ namespace roofer::reconstruction {
       for (const auto& constraint : constraints_to_restore) {
         if (vnew == constraint.other) continue;
 
-        labelled_constraints.push_back({vnew, constraint.other,
-                                        constraint.left_label,
-                                        constraint.right_label});
+        // Two constraints to the same vertex now coincide, and the region
+        // between them is gone: keep the labels on their outer sides.
+        auto merged = std::find_if(
+            labelled_constraints.begin(), labelled_constraints.end(),
+            [&](const auto& other) { return other.second == constraint.other; });
+        if (merged != labelled_constraints.end() &&
+            merged->right_label == constraint.left_label) {
+          merged->right_label = constraint.right_label;
+        } else if (merged != labelled_constraints.end() &&
+                   merged->left_label == constraint.right_label) {
+          merged->left_label = constraint.left_label;
+        } else {
+          labelled_constraints.push_back({vnew, constraint.other,
+                                          constraint.left_label,
+                                          constraint.right_label});
+        }
       }
       insert_labelled_constraints_and_relabel(tri, labelled_constraints,
                                               source_ids, unbounded_label);
