@@ -68,6 +68,12 @@ Numeric absolute ceiling elevation attribute. If omitted or its value is null, u
 ```{option} --underpass-default-height <float> (default: 4)
 Underpass clearance above the floor when the height attribute is omitted or its value is null, in metres.
 ```
+```{option} --line-source <string> (default: <no value>)
+Optional OGR source of 2D roof lines (LineString or MultiLineString) in the footprint CRS. The lines inside a footprint join its detected lines before the roof partition, see reconstruction.line-regulariser.external-line-priority.
+```
+```{option} --line-source-layer <string> (default: <no value>)
+Roof line layer (default: first layer).
+```
 ```{option} --filter <string> (default: <no value>)
 Specify WHERE clause in OGR SQL to select specfic features from `<polygon-source>`. See https://gdal.org/en/stable/user/ogr_sql_dialect.html#where
 ```
