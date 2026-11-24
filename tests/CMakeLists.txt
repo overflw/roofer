@@ -99,7 +99,7 @@ add_executable("test_arrangement_snapper"
                "${CMAKE_CURRENT_SOURCE_DIR}/test_arrangement_snapper.cpp")
 target_link_libraries("test_arrangement_snapper"
                       PRIVATE Catch2::Catch2WithMain roofer-core)
-catch_discover_tests("test_arrangement_snapper")
+catch_discover_tests("test_arrangement_snapper" PROPERTIES TIMEOUT 30)
 
 add_executable(test_line_chain test_line_chain.cpp)
 target_link_libraries(test_line_chain PRIVATE Catch2::Catch2WithMain roofer-core)
@@ -119,6 +119,10 @@ catch_discover_tests("test_terrain")
 add_executable(test_triangulation_boundary test_triangulation_boundary.cpp)
 target_link_libraries(test_triangulation_boundary PRIVATE Catch2::Catch2WithMain roofer-core)
 catch_discover_tests(test_triangulation_boundary)
+
+add_executable(test_triangulation_snapper test_triangulation_snapper.cpp)
+target_link_libraries(test_triangulation_snapper PRIVATE Catch2::Catch2WithMain roofer-core)
+catch_discover_tests(test_triangulation_snapper PROPERTIES TIMEOUT 30)
 
 add_executable(test_polygon_snapper test_polygon_snapper.cpp)
 target_link_libraries(test_polygon_snapper PRIVATE Catch2::Catch2WithMain roofer-core)
