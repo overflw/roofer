@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <numbers>
 #include <map>
 #include <optional>
 #include <set>
@@ -136,7 +137,8 @@ namespace roofer::reconstruction {
       return Point2{(r[0][0] + r[2][0]) / 2, (r[0][1] + r[2][1]) / 2};
     };
     auto ua = rectangle_axis(a), ub = rectangle_axis(b);
-    if (std::abs(ua[0] * ub[0] + ua[1] * ub[1]) < std::cos(10 * M_PI / 180))
+    if (std::abs(ua[0] * ub[0] + ua[1] * ub[1]) <
+        std::cos(10 * std::numbers::pi / 180))
       return false;
     auto ca = centre(a), cb = centre(b);
     double dx = cb[0] - ca[0], dy = cb[1] - ca[1];
@@ -167,12 +169,10 @@ namespace roofer::reconstruction {
   }
 
   /**
-   * `r` carried on along its axis to the footprint's border, at either end
-   * that lies within `reach` of it: straight on where the border lies ahead,
-   * else as far on as its nearest point lies ahead, a corner the structure
-   * runs into. Points next
-   * to a facade are few, so a structure stops a little short of the border
-   * in them; unless it reaches it, the faces on either side of it stay one.
+   * `r` carried on along its axis to the footprint's border at either end
+   * within `reach` of it: straight on to the border ahead, or as far as the
+   * nearest border point lies ahead (a corner). The faces either side of a
+   * structure stay one unless it reaches the border.
    *
    * @param rings the footprint's rings, each a closed sequence of (x, y)
    */
@@ -228,7 +228,8 @@ namespace roofer::reconstruction {
       double best_t = 0, best_s = 0;
       size_t best_n = 0;
       for (int deg = 0; deg < 180; ++deg) {
-        double t = deg * M_PI / 180, nx = -std::sin(t), ny = std::cos(t);
+        double t = deg * std::numbers::pi / 180, nx = -std::sin(t),
+               ny = std::cos(t);
         double lo = INFINITY, hi = -INFINITY;
         for (auto i : left) {
           double s = nx * xyz[i][0] + ny * xyz[i][1];
@@ -454,7 +455,7 @@ namespace roofer::reconstruction {
     std::set<int> steep;
     for (auto& [k, v] : planes)
       if (std::abs(v.first.c()) <
-          std::cos(pd.narrow_max_slope * M_PI / 180) *
+          std::cos(pd.narrow_max_slope * std::numbers::pi / 180) *
               std::hypot(v.first.a(), v.first.b(), v.first.c()))
         steep.insert(k);
     auto stands =
@@ -580,7 +581,7 @@ namespace roofer::reconstruction {
       };
       double length = std::hypot(r[1][0] - r[0][0], r[1][1] - r[0][1]);
       auto m = narrow_profile(pts, r, alpha_radius);
-      bool isolated = inside(r[0]) && inside(r[1]) &&
+      bool isolated = inside(mid(0, 3)) && inside(mid(1, 2)) &&
                       std::abs(m[0] - m[2]) <= pd.narrow_min_height;
       if (length < 4 * alpha_radius ||
           (isolated && length < pd.narrow_min_length) ||

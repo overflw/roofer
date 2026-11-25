@@ -2,6 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 #include <random>
+#include <unordered_map>
 
 using namespace roofer::reconstruction;
 namespace {
@@ -154,4 +155,69 @@ TEST_CASE(
   CHECK(f[1] - std::fmax(f[0], f[2]) < 0);
   auto m = narrow_profile(wall, line, r);
   CHECK(m[1] - std::fmax(m[0], m[2]) == Catch::Approx(0.6));
+}
+
+namespace {
+  struct P3 {
+    double x_, y_, z_;
+    P3(double x, double y, double z) : x_(x), y_(y), z_(z) {}
+    double x() const { return x_; }
+    double y() const { return y_; }
+    double z() const { return z_; }
+  };
+  struct Pl {
+    double a_ = 0, b_ = 0, c_ = 1, d_ = 0;
+    Pl() = default;
+    Pl(double a, double b, double c, double d) : a_(a), b_(b), c_(c), d_(d) {}
+    double a() const { return a_; }
+    double b() const { return b_; }
+    double c() const { return c_; }
+    double d() const { return d_; }
+  };
+  struct Footprint : std::vector<Point2> {
+    std::vector<std::vector<Point2>> interior_rings() const { return {}; }
+  };
+  struct Config {
+    float plane_epsilon = 0.2F, narrow_max_slope = 10, narrow_min_height = 0.5F,
+          narrow_min_length = 4;
+    int min_plane_points = 15;
+  };
+}  // namespace
+
+TEST_CASE(
+    "a wall's plane left with too few points gives way to its structure") {
+  std::vector<std::array<double, 3>> pts;
+  std::vector<int> labels;
+  roof([](double, double y) { return std::abs(y - 5) < 0.2 ? 0.6 : 0.0; }, pts,
+       labels);
+  for (size_t i = 0; i < pts.size(); ++i)
+    labels[i] = labels[i] == 0 ? 3 : pts[i][1] < 5 ? 1 : 2;
+  size_t n = pts.size();
+  for (int k = 0; k < 5; ++k) {  // stray points of the wall's plane
+    pts.push_back({10, 8 + 0.1 * k, 10.6});
+    labels.push_back(3);
+  }
+  std::unordered_map<int, std::pair<Pl, std::vector<P3>>> planes;
+  for (size_t i = 0; i < pts.size(); ++i) {
+    auto& p = planes[labels[i]];
+    p.first = Pl(0, 0, 1, labels[i] == 3 ? -10.6 : -10);
+    p.second.emplace_back(pts[i][0], pts[i][1], pts[i][2]);
+  }
+  std::map<size_t, std::map<size_t, size_t>> adjacencies{
+      {1, {{3, 10}}}, {2, {{3, 10}}}, {3, {{1, 10}, {2, 10}}}};
+  Footprint footprint;
+  footprint.assign({{0, 0}, {20, 0}, {20, 10}, {0, 10}});
+  auto narrow = narrow_structures(pts, labels, planes, adjacencies, footprint,
+                                  Config{}, r);
+  REQUIRE(narrow.size() == 1);
+  CHECK(narrow.begin()->first == 4);
+  CHECK(planes.count(3) == 0);
+  CHECK(planes.at(4).first.c() == Catch::Approx(1));
+  CHECK(-planes.at(4).first.d() == Catch::Approx(10.6).margin(0.05));
+  CHECK(adjacencies.count(3) == 0);
+  for (auto& [k, adjacent] : adjacencies) CHECK(adjacent.count(3) == 0);
+  for (size_t i = 0; i < pts.size(); ++i) {
+    bool wall = std::abs(pts[i][1] - 5) < 0.2;
+    CHECK(labels[i] == (i >= n ? 0 : wall ? 4 : pts[i][1] < 5 ? 1 : 2));
+  }
 }
