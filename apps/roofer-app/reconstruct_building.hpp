@@ -408,207 +408,15 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
     //         "world/segmented_points",
     //         rerun::Points3D(points_roof).with_class_ids(PlaneDetector->plane_id));
     // #endif
-    // narrow-planes: wall tops and parapets as planes outlined by rectangles
     std::map<int, roofer::reconstruction::Rectangle> narrow;
     const double alpha_radius = std::sqrt(reconstruction.alpha_shaper.alpha);
     if (reconstruction.plane_detector.narrow_planes) {
       t0 = std::chrono::high_resolution_clock::now();
-      auto& labels = PlaneDetector->plane_id;
-      auto& planes = PlaneDetector->pts_per_roofplane;
-      const auto& pd = reconstruction.plane_detector;
-      const auto& pts = building.pointcloud_building;
-      auto outline = [&](int k) {
-        std::vector<roofer::reconstruction::Point2> xy;
-        for (auto& p : planes[k].second) xy.push_back({p.x(), p.y()});
-        return roofer::reconstruction::narrow_outline(xy, alpha_radius);
-      };
-      auto drop = [&](int k) {
-        narrow.erase(k);
-        planes.erase(k);
-        PlaneDetector->plane_adjacencies.erase(k);
-        for (auto& [l, adjacent] : PlaneDetector->plane_adjacencies)
-          adjacent.erase(k);
-        for (auto& l : labels)
-          if (l == k) l = 0;
-      };
-      std::set<int> steep;
-      for (auto& [k, v] : planes)
-        if (std::abs(v.first.c()) <
-            std::cos(pd.narrow_max_slope * M_PI / 180) *
-                std::hypot(v.first.a(), v.first.b(), v.first.c()))
-          steep.insert(k);
-      auto stands = roofer::reconstruction::standing(
-          pts, labels, 2 * alpha_radius, pd.plane_epsilon, steep);
-      std::map<int, std::array<size_t, 2>> standing;
-      for (size_t i = 0; i < labels.size(); ++i)
-        if (labels[i] > 0 && planes.count(labels[i])) {
-          auto& s = standing[labels[i]];
-          s[0] += stands[i], s[1] += 1;
-        }
-      auto runs = [&](const std::vector<std::array<double, 3>>& xyz) {
-        return roofer::reconstruction::narrow_runs(
-            xyz, alpha_radius, 4 * alpha_radius, pd.plane_epsilon);
-      };
-      auto is_narrow = [&](const std::vector<std::array<double, 3>>& xyz,
-                           const std::vector<size_t>& run) {
-        std::vector<roofer::reconstruction::Point2> xy;
-        for (auto i : run) xy.push_back({xyz[i][0], xyz[i][1]});
-        auto o = roofer::reconstruction::narrow_outline(xy, alpha_radius);
-        if (!o) return false;
-        auto m = roofer::reconstruction::narrow_profile(pts, *o, alpha_radius);
-        return m[1] - std::fmax(m[0], m[2]) >= pd.narrow_min_height;
-      };
-      // a standing plane's narrow runs go loose, it keeps the rest if enough
-      std::vector<bool> released(labels.size(), false);
-      const auto labels0 = labels;
-      const auto planes0 = planes;
-      const auto adjacencies0 = PlaneDetector->plane_adjacencies;
-      for (auto& [k, s] : standing) {
-        if (2 * s[0] <= s[1]) continue;
-        std::vector<size_t> index;
-        std::vector<std::array<double, 3>> xyz;
-        for (size_t i = 0; i < labels.size(); ++i)
-          if (labels[i] == k) {
-            index.push_back(i);
-            xyz.push_back({pts[i][0], pts[i][1], pts[i][2]});
-          }
-        for (auto& run : runs(xyz))
-          if (is_narrow(xyz, run))
-            for (auto j : run) labels[index[j]] = 0, released[index[j]] = true;
-        auto& kept = planes[k].second;
-        kept.clear();
-        for (auto i : index)
-          if (labels[i] == k)
-            kept.emplace_back(pts[i][0], pts[i][1], pts[i][2]);
-        if (kept.size() < size_t(pd.min_plane_points)) drop(k);
-      }
-      std::vector<size_t> loose;
-      std::vector<std::array<double, 3>> xyz;
-      for (size_t i = 0; i < labels.size(); ++i)
-        if (labels[i] == 0 && (stands[i] || released[i])) {
-          loose.push_back(i);
-          xyz.push_back({pts[i][0], pts[i][1], pts[i][2]});
-        }
-      int id = 0;  // past every plane, also those dropped above
-      for (auto& [k, v] : planes0) id = std::max(id, k);
-      for (auto& run : runs(xyz)) {
-        if (!is_narrow(xyz, run)) continue;
-        ++id;
-        for (auto i : run) {
-          planes[id].second.emplace_back(xyz[i][0], xyz[i][1], xyz[i][2]);
-          labels[loose[i]] = id;
-        }
-        narrow[id] = *outline(id);
-      }
-      auto level_across = [&](int k) {
-        std::vector<std::array<double, 3>> xyz;
-        for (auto& p : planes[k].second) xyz.push_back({p.x(), p.y(), p.z()});
-        auto c = roofer::reconstruction::narrow_plane(xyz, narrow[k]);
-        planes[k].first = roofer::Plane(c[0], c[1], c[2], c[3]);
-      };
-      for (auto& [k, r] : narrow) level_across(k);
-      // pieces of one narrow structure at one height become one plane
-      auto height = [&](int k, double x, double y) {
-        const auto& pl = planes[k].first;
-        return -(pl.a() * x + pl.b() * y + pl.d()) / pl.c();
-      };
-      for (bool merged = true; merged;) {
-        merged = false;
-        for (auto a = narrow.begin(); a != narrow.end() && !merged;) {
-          auto next = std::next(a);
-          for (auto b = std::next(a); b != narrow.end(); ++b) {
-            double x = (a->second[0][0] + b->second[2][0]) / 2,
-                   y = (a->second[0][1] + b->second[2][1]) / 2;
-            if (!roofer::reconstruction::narrow_in_line(a->second, b->second,
-                                                        alpha_radius) ||
-                std::abs(height(a->first, x, y) - height(b->first, x, y)) >
-                    pd.plane_epsilon)
-              continue;
-            std::vector<roofer::reconstruction::Point2> xy;
-            for (auto k : {a->first, b->first})
-              for (auto& p : planes[k].second) xy.push_back({p.x(), p.y()});
-            auto r = roofer::reconstruction::narrow_outline(xy, alpha_radius);
-            if (!r) continue;
-            auto& pb = planes[b->first].second;
-            planes[a->first].second.insert(planes[a->first].second.end(),
-                                           pb.begin(), pb.end());
-            for (auto& l : labels)
-              if (l == b->first) l = a->first;
-            drop(b->first);
-            a->second = *r;
-            level_across(a->first);
-            merged = true;
-            break;
-          }
-          if (!merged) a = next;
-        }
-      }
-      std::vector<std::vector<roofer::reconstruction::Point2>> rings(1);
-      for (auto& p : building.footprint) rings[0].push_back({p[0], p[1]});
-      for (auto& hole : building.footprint.interior_rings()) {
-        rings.emplace_back();
-        for (auto& p : hole) rings.back().push_back({p[0], p[1]});
-      }
-      std::vector<roofer::arr3f> unsegmented;
-      for (size_t i = 0; i < labels.size(); ++i)
-        if (labels[i] == 0) unsegmented.push_back(pts[i]);
-      std::vector<int> short_or_on_border;
-      for (auto& [k, r] : narrow) {
-        r = roofer::reconstruction::narrow_extend(
-            r, unsegmented, [&](double x, double y) { return height(k, x, y); },
-            pd.plane_epsilon, 2 * alpha_radius);
-        r = roofer::reconstruction::narrow_to_border(r, rings,
-                                                     4 * alpha_radius);
-        auto mid = [&](int i, int j) {
-          return roofer::reconstruction::Point2{(r[i][0] + r[j][0]) / 2,
-                                                (r[i][1] + r[j][1]) / 2};
-        };
-        auto inside = [&](roofer::reconstruction::Point2 p) {
-          return roofer::reconstruction::to_border(rings, p[0], p[1]) >
-                 2 * alpha_radius;
-        };
-        double length = std::hypot(r[1][0] - r[0][0], r[1][1] - r[0][1]);
-        auto m = roofer::reconstruction::narrow_profile(pts, r, alpha_radius);
-        bool isolated = inside(r[0]) && inside(r[1]) &&
-                        std::abs(m[0] - m[2]) <= pd.narrow_min_height;
-        if (length < 4 * alpha_radius ||
-            (isolated && length < pd.narrow_min_length) ||
-            !(inside(mid(0, 2)) || inside(mid(0, 3)) || inside(mid(1, 2))))
-          short_or_on_border.push_back(k);
-      }
-      for (auto k : short_or_on_border) drop(k);
-      if (narrow.empty()) {
-        labels = labels0;
-        planes = planes0;
-        PlaneDetector->plane_adjacencies = adjacencies0;
-      } else {
-        // leftover points go back to their plane, if enough for a dropped one
-        std::map<int, size_t> back;
-        for (size_t i = 0; i < labels.size(); ++i)
-          if (labels[i] == 0 && labels0[i] > 0 && planes0.count(labels0[i]))
-            ++back[labels0[i]];
-        auto& adjacencies = PlaneDetector->plane_adjacencies;
-        for (auto [k, n] : back) {
-          bool dropped = !planes.count(k);
-          if (dropped && n < size_t(pd.min_plane_points)) continue;
-          for (size_t i = 0; i < labels.size(); ++i)
-            if (labels[i] == 0 && labels0[i] == k) labels[i] = k;
-          planes[k].first = planes0.at(k).first;
-          auto& kept = planes[k].second;
-          kept.clear();
-          for (size_t i = 0; i < labels.size(); ++i)
-            if (labels[i] == k)
-              kept.emplace_back(pts[i][0], pts[i][1], pts[i][2]);
-          if (!dropped) continue;
-          if (adjacencies0.count(k))
-            for (auto& [l, n] : adjacencies0.at(k))
-              if (planes.count(l)) adjacencies[k][l] = n;
-          for (auto& [l, adjacent] : adjacencies0)
-            if (adjacent.count(k) && planes.count(l))
-              adjacencies[l][k] = adjacent.at(k);
-        }
-      }
-      building.roof_n_planes = planes.size();
+      narrow = roofer::reconstruction::narrow_structures(
+          building.pointcloud_building, PlaneDetector->plane_id,
+          PlaneDetector->pts_per_roofplane, PlaneDetector->plane_adjacencies,
+          building.footprint, reconstruction.plane_detector, alpha_radius);
+      building.roof_n_planes = PlaneDetector->pts_per_roofplane.size();
       timings["NarrowPlanes"] = std::chrono::high_resolution_clock::now() - t0;
     }
 
@@ -632,7 +440,7 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
         auto z = [&](const roofer::reconstruction::Point2& p) {
           return roofer::arr3f{
               float(p[0]), float(p[1]),
-              float(-(pl.a() * p[0] + pl.b() * p[1] + pl.d()) / pl.c())};
+              float(roofer::reconstruction::plane_z(pl, p[0], p[1]))};
         };
         AlphaShaper->alpha_triangles.push_back({z(r[0]), z(r[1]), z(r[2])});
         AlphaShaper->alpha_triangles.push_back({z(r[0]), z(r[2]), z(r[3])});
@@ -837,8 +645,8 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
               const auto& pl = PlaneDetector->pts_per_roofplane.at(id).first;
               if (roofer::reconstruction::in_rectangle(r, c[0], c[1],
                                                        alpha_radius / 10) &&
-                  std::abs(c[2] +
-                           (pl.a() * c[0] + pl.b() * c[1] + pl.d()) / pl.c()) <
+                  std::abs(c[2] -
+                           roofer::reconstruction::plane_z(pl, c[0], c[1])) <
                       reconstruction.plane_detector.plane_epsilon / 2) {
                 attributes[j].insert(cfg->a_narrow, true);
                 break;
