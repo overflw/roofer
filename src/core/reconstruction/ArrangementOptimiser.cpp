@@ -215,11 +215,12 @@ namespace roofer::reconstruction {
   };
 
   class ArrangementOptimiser : public ArrangementOptimiserInterface {
-    void compute(Arrangement_2& arr, const RasterTools::Raster& heightfield,
-                 const IndexedPlanesWithPoints& roof_planes,
-                 const IndexedPlanesWithPoints& ground_planes,
-                 ArrangementOptimiserConfig cfg,
-                 std::function<bool(Arrangement_2::Face_handle, int)> allowed) override {
+    void compute(
+        Arrangement_2& arr, const RasterTools::Raster& heightfield,
+        const IndexedPlanesWithPoints& roof_planes,
+        const IndexedPlanesWithPoints& ground_planes,
+        ArrangementOptimiserConfig cfg,
+        std::function<bool(Arrangement_2::Face_handle, int)> allowed) override {
       std::vector<std::tuple<Plane, size_t>>
           points_per_plane;  // plane, points, seg_id
       for (const auto& [plane_id, plane_pts] : roof_planes) {

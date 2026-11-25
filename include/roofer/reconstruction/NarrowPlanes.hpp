@@ -145,7 +145,8 @@ namespace roofer::reconstruction {
   /**
    * `r` carried on along its axis to the footprint's border, at either end
    * that lies within `reach` of it: straight on where the border lies ahead,
-   * else to its nearest point, a corner the structure runs into. Points next
+   * else as far on as its nearest point lies ahead, a corner the structure
+   * runs into. Points next
    * to a facade are few, so a structure stops a little short of the border
    * in them; unless it reaches it, the faces on either side of it stay one.
    *
@@ -176,10 +177,10 @@ namespace roofer::reconstruction {
           double d = std::hypot(c[0] - p[0], c[1] - p[1]);
           if (d < near) near = d, q = c;
         }
-      if (best_t <= reach)
-        return Point2{p[0] + best_t * dx, p[1] + best_t * dy};
-      if (near <= reach) return q;
-      return p;
+      if (best_t > reach && near <= reach)
+        best_t = (q[0] - p[0]) * dx + (q[1] - p[1]) * dy;
+      if (best_t <= 0 || best_t > reach) return p;
+      return Point2{p[0] + best_t * dx, p[1] + best_t * dy};
     };
     double ux = r[1][0] - r[0][0], uy = r[1][1] - r[0][1],
            l = std::hypot(ux, uy);

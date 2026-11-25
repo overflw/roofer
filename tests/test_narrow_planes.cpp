@@ -105,6 +105,16 @@ TEST_CASE("a structure runs on over its points and to the border") {
   CHECK(r3[1][0] == Catch::Approx(8));
 }
 
+TEST_CASE("a structure beside the border keeps its place") {
+  Rectangle r0{Point2{4, 8.5}, Point2{8, 8.5}, Point2{8, 8.7}, Point2{4, 8.7}};
+  std::vector<std::vector<Point2>> rings{{{0, 0}, {13, 0}, {13, 10}, {0, 10}}};
+  auto r1 = narrow_to_border(r0, rings, 4 * r);
+  for (int i = 0; i < 4; ++i) {
+    CHECK(r1[i][0] == Catch::Approx(r0[i][0]));
+    CHECK(r1[i][1] == Catch::Approx(r0[i][1]));
+  }
+}
+
 TEST_CASE("a short structure's lines run on no farther than it is long") {
   Rectangle r0{Point2{4, 4.9}, Point2{6, 4.9}, Point2{6, 5.1}, Point2{4, 5.1}};
   auto edges = narrow_edges(r0, 10);

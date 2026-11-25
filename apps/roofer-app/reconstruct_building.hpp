@@ -496,8 +496,8 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
           loose.push_back(i);
           xyz.push_back({pts[i][0], pts[i][1], pts[i][2]});
         }
-      int id = 0;
-      for (auto& [k, v] : planes) id = std::max(id, k);
+      int id = 0;  // past every plane, also those dropped above
+      for (auto& [k, v] : planes0) id = std::max(id, k);
       for (auto& run : runs(xyz)) {
         if (!is_narrow(xyz, run)) continue;
         ++id;
@@ -589,14 +589,18 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
         planes = planes0;
         PlaneDetector->plane_adjacencies = adjacencies0;
       } else {
-        // points left in no narrow structure go back to their plane
-        std::set<int> back;
+        // points left in no narrow structure go back to their plane, to a
+        // dropped one only if they are enough for it
+        std::map<int, size_t> back;
         for (size_t i = 0; i < labels.size(); ++i)
           if (labels[i] == 0 && labels0[i] > 0 && planes0.count(labels0[i]))
-            labels[i] = labels0[i], back.insert(labels0[i]);
+            ++back[labels0[i]];
         auto& adjacencies = PlaneDetector->plane_adjacencies;
-        for (auto k : back) {
+        for (auto [k, n] : back) {
           bool dropped = !planes.count(k);
+          if (dropped && n < size_t(pd.min_plane_points)) continue;
+          for (size_t i = 0; i < labels.size(); ++i)
+            if (labels[i] == 0 && labels0[i] == k) labels[i] = k;
           planes[k].first = planes0.at(k).first;
           auto& kept = planes[k].second;
           kept.clear();
@@ -612,6 +616,7 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
               adjacencies[l][k] = adjacent.at(k);
         }
       }
+      building.roof_n_planes = planes.size();
       timings["NarrowPlanes"] = std::chrono::high_resolution_clock::now() - t0;
     }
 
@@ -778,20 +783,19 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
     optimiser_config.use_ground =
         !building.pointcloud_ground.empty() && reconstruction.clip_terrain;
     // A narrow plane can fit a cell off its outline as well as the roof does,
-    // so it labels only the cells on it.
+    // so it labels only the cells within it.
     auto on_outline = [&](roofer::Arrangement_2::Face_handle f, int id) {
       auto n = narrow.find(id);
       if (n == narrow.end()) return true;
-      double cx = 0, cy = 0;
-      int count = 0;
+      if (f->number_of_holes() > 0) return false;
       auto he = f->outer_ccb(), first = he;
       do {
-        cx += CGAL::to_double(he->source()->point().x());
-        cy += CGAL::to_double(he->source()->point().y());
-        ++count;
+        if (!roofer::reconstruction::in_rectangle(
+                n->second, CGAL::to_double(he->source()->point().x()),
+                CGAL::to_double(he->source()->point().y()), alpha_radius / 4))
+          return false;
       } while (++he != first);
-      return roofer::reconstruction::in_rectangle(n->second, cx / count,
-                                                  cy / count, 0);
+      return true;
     };
     ArrangementOptimiser->compute(
         arrangement, SegmentRasteriser->heightfield,
@@ -840,9 +844,11 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
               for (int k = 0; k < 3; ++k) c[k] += p[k] / polygons[j].size();
             for (const auto& [id, r] : narrow) {
               const auto& pl = PlaneDetector->pts_per_roofplane.at(id).first;
-              if (roofer::reconstruction::in_rectangle(r, c[0], c[1], 0.05) &&
-                  std::abs(c[2] + (pl.a() * c[0] + pl.b() * c[1] + pl.d()) /
-                                      pl.c()) < 0.1) {
+              if (roofer::reconstruction::in_rectangle(r, c[0], c[1],
+                                                       alpha_radius / 10) &&
+                  std::abs(c[2] +
+                           (pl.a() * c[0] + pl.b() * c[1] + pl.d()) / pl.c()) <
+                      reconstruction.plane_detector.plane_epsilon / 2) {
                 attributes[j].insert(cfg->a_narrow, true);
                 break;
               }
