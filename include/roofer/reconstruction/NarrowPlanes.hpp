@@ -225,8 +225,8 @@ namespace roofer::reconstruction {
     for (size_t i = 0; i < xyz.size(); ++i) left[i] = i;
     std::vector<size_t> bins;
     while (left.size() >= 3) {
-      double best_t = 0, best_s = 0;
-      size_t best_n = 0;
+      double best_t = 0, best_lo = 0;
+      size_t best_n = 0, best_b = 0;
       for (int deg = 0; deg < 180; ++deg) {
         double t = deg * std::numbers::pi / 180, nx = -std::sin(t),
                ny = std::cos(t);
@@ -239,7 +239,7 @@ namespace roofer::reconstruction {
         for (auto i : left) {
           size_t b = (nx * xyz[i][0] + ny * xyz[i][1] - lo) / bin;
           if (++bins[b] > best_n)
-            best_n = bins[b], best_t = t, best_s = lo + (b + 0.5) * bin;
+            best_n = bins[b], best_t = t, best_lo = lo, best_b = b;
         }
       }
       if (best_n < 3) break;
@@ -247,7 +247,7 @@ namespace roofer::reconstruction {
       std::vector<double> in_bin;
       for (auto i : left) {
         double s = nx * xyz[i][0] + ny * xyz[i][1];
-        if (std::abs(s - best_s) <= bin / 2) in_bin.push_back(s);
+        if (size_t((s - best_lo) / bin) == best_b) in_bin.push_back(s);
       }
       std::nth_element(in_bin.begin(), in_bin.begin() + in_bin.size() / 2,
                        in_bin.end());

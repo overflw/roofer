@@ -89,6 +89,15 @@ TEST_CASE("structures of two heights on one line make two runs") {
   }
 }
 
+TEST_CASE("points on a bin edge still make a run") {
+  std::vector<std::array<double, 3>> xyz;
+  for (double x = 0; x < 10; x += 0.5) xyz.push_back({x, 3.96, 10.6});
+  double a = std::sqrt(0.3);
+  auto runs = narrow_runs(xyz, a, 4 * a, epsilon);
+  REQUIRE(runs.size() == 1);
+  CHECK(runs[0].size() == 20);
+}
+
 TEST_CASE("a structure runs on over its points and to the border") {
   Rectangle r0{Point2{4, 4.9}, Point2{8, 4.9}, Point2{8, 5.1}, Point2{4, 5.1}};
   std::vector<std::array<double, 3>> line;

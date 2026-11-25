@@ -273,6 +273,7 @@ namespace roofer::reconstruction {
           }
         }
       }
+
       // std::cerr << "  Graph-cut with " << faces.size() << " faces and " <<
       // points_per_plane.size() << " plane labels\n"; don't bother if there are
       // no planes or faces
