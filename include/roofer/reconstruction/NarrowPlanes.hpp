@@ -231,23 +231,28 @@ namespace roofer::reconstruction {
   /**
    * `r` carried on along its axis at either end across another structure
    * whose line, run on by `reach`, it meets, to that structure's far side
-   * within `reach`: walls meeting at a T or a corner join.
+   * within `reach`, if that structure's end would reach as far across `r`:
+   * walls meeting at a T or a corner join, pieces of one line (within 10
+   * degrees) do not.
    */
   inline Rectangle narrow_to_crossing(const Rectangle& r,
                                       const std::vector<Rectangle>& others,
                                       double reach) {
+    auto half_width = [](const Rectangle& q) {
+      return std::hypot(q[3][0] - q[0][0], q[3][1] - q[0][1]) / 2;
+    };
     return carry_ends(r, [&](Point2 p, double dx, double dy) {
       double best = INFINITY;
       for (const auto& o : others) {
         auto [ox, oy, l] = rectangle_axis(o);
         auto a = mid(o, 0, 3);
         double den = dx * oy - dy * ox, ax = a[0] - p[0], ay = a[1] - p[1];
-        if (std::abs(den) < 1e-9) continue;
+        if (std::abs(den) < std::sin(10 * std::numbers::pi / 180)) continue;
+        // as far as `o` would run on to the far side of `r`
         double s = (ax * dy - ay * dx) / den,
-               far = (ax * oy - ay * ox) / den +
-                     std::hypot(o[3][0] - o[0][0], o[3][1] - o[0][1]) / 2 /
-                         std::abs(den);
-        if (s >= -reach && s <= l + reach && far > 0 && far <= reach)
+               o_reach = reach - half_width(r) / std::abs(den),
+               far = (ax * oy - ay * ox) / den + half_width(o) / std::abs(den);
+        if (s >= -o_reach && s <= l + o_reach && far > 0 && far <= reach)
           best = std::min(best, far);
       }
       if (best == INFINITY) return p;

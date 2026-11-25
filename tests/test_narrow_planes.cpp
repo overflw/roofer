@@ -293,6 +293,17 @@ TEST_CASE("a wall runs on across a wall it meets, not beside one") {
   auto r2 = narrow_to_crossing(k, {across}, 4 * 0.55);
   CHECK(r2[1][0] == Catch::Approx(11));
   CHECK(r2[0][0] == Catch::Approx(0));
+  double c = std::cos(5 * std::numbers::pi / 180),
+         n = std::sin(5 * std::numbers::pi / 180);
+  Rectangle tilted{Point2{10.5, 5 - 0.1 * c}, Point2{10.5 + 5 * c, 5 + 5 * n},
+                   Point2{10.5 + 5 * c - 0.2 * n, 5 + 5 * n + 0.2 * c},
+                   Point2{10.5 - 0.2 * n, 5 + 0.1 * c}};
+  auto r3 = narrow_to_crossing(k, {tilted}, 4 * 0.55);
+  CHECK(r3[1][0] == Catch::Approx(10));
+  Rectangle far_off{Point2{10.6, 7.15}, Point2{10.6, 9}, Point2{10.4, 9},
+                    Point2{10.4, 7.15}};
+  auto r4 = narrow_to_crossing(k, {far_off}, 4 * 0.55);
+  CHECK(r4[1][0] == Catch::Approx(10));
 }
 
 TEST_CASE("a wall keeps the ends of its points off its line") {
