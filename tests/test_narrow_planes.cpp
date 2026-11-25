@@ -193,6 +193,24 @@ namespace {
   };
 }  // namespace
 
+namespace {
+  // The narrow structures of `roof`, its points labelled 1 on plane 1.
+  std::map<int, Rectangle> on_flat_roof(std::vector<std::array<double, 3>>& pts,
+                                        std::vector<int>& labels) {
+    std::unordered_map<int, std::pair<Pl, std::vector<P3>>> planes;
+    for (size_t i = 0; i < pts.size(); ++i)
+      if (labels[i] == 1) {
+        planes[1].first = Pl(0, 0, 1, -10);
+        planes[1].second.emplace_back(pts[i][0], pts[i][1], pts[i][2]);
+      }
+    std::map<size_t, std::map<size_t, size_t>> adjacencies;
+    Footprint footprint;
+    footprint.assign({{0, 0}, {20, 0}, {20, 10}, {0, 10}});
+    return narrow_structures(pts, labels, planes, adjacencies, footprint,
+                             Config{}, r);
+  }
+}  // namespace
+
 TEST_CASE(
     "a wall's plane left with too few points gives way to its structure") {
   std::vector<std::array<double, 3>> pts;
@@ -256,17 +274,7 @@ TEST_CASE("a wall that meets another runs on to it") {
                                                                           : 0.0;
       },
       pts, labels);
-  std::unordered_map<int, std::pair<Pl, std::vector<P3>>> planes;
-  for (size_t i = 0; i < pts.size(); ++i)
-    if (labels[i] == 1) {
-      planes[1].first = Pl(0, 0, 1, -10);
-      planes[1].second.emplace_back(pts[i][0], pts[i][1], pts[i][2]);
-    }
-  std::map<size_t, std::map<size_t, size_t>> adjacencies;
-  Footprint footprint;
-  footprint.assign({{0, 0}, {20, 0}, {20, 10}, {0, 10}});
-  auto narrow = narrow_structures(pts, labels, planes, adjacencies, footprint,
-                                  Config{}, r);
+  auto narrow = on_flat_roof(pts, labels);
   REQUIRE(narrow.size() == 2);
   auto& main = narrow.begin()->second;
   auto& branch = std::next(narrow.begin())->second;
@@ -305,17 +313,7 @@ TEST_CASE("pieces of a wall at two heights meet but do not overlap") {
         return x < 9 ? 0.6 : x > 10 ? 1.2 : 0.0;
       },
       pts, labels);
-  std::unordered_map<int, std::pair<Pl, std::vector<P3>>> planes;
-  for (size_t i = 0; i < pts.size(); ++i)
-    if (labels[i] == 1) {
-      planes[1].first = Pl(0, 0, 1, -10);
-      planes[1].second.emplace_back(pts[i][0], pts[i][1], pts[i][2]);
-    }
-  std::map<size_t, std::map<size_t, size_t>> adjacencies;
-  Footprint footprint;
-  footprint.assign({{0, 0}, {20, 0}, {20, 10}, {0, 10}});
-  auto narrow = narrow_structures(pts, labels, planes, adjacencies, footprint,
-                                  Config{}, r);
+  auto narrow = on_flat_roof(pts, labels);
   REQUIRE(narrow.size() == 2);
   auto& a = narrow.begin()->second;
   auto& b = std::next(narrow.begin())->second;

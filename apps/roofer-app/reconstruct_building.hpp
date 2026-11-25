@@ -409,7 +409,8 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
     //         rerun::Points3D(points_roof).with_class_ids(PlaneDetector->plane_id));
     // #endif
     std::map<int, roofer::reconstruction::Rectangle> narrow;
-    const double alpha_radius = std::sqrt(reconstruction.alpha_shaper.alpha);
+    const double alpha_radius = std::sqrt(reconstruction.alpha_shaper.alpha),
+                 outline_margin = alpha_radius / 4;
     if (reconstruction.plane_detector.narrow_planes) {
       t0 = std::chrono::high_resolution_clock::now();
       narrow = roofer::reconstruction::narrow_structures(
@@ -429,7 +430,7 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
       roofer::vec1i ids;
       for (size_t i = 0; i < AlphaShaper->alpha_rings.size(); ++i) {
         if (narrow.count(AlphaShaper->roofplane_ids[i])) continue;
-        alpha_rings.push_back(AlphaShaper->alpha_rings[i]);
+        alpha_rings.push_back(std::move(AlphaShaper->alpha_rings[i]));
         ids.push_back(AlphaShaper->roofplane_ids[i]);
       }
       AlphaShaper->alpha_rings = std::move(alpha_rings);
@@ -590,7 +591,7 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
       do {
         if (!roofer::reconstruction::in_rectangle(
                 n->second, CGAL::to_double(he->source()->point().x()),
-                CGAL::to_double(he->source()->point().y()), alpha_radius / 4))
+                CGAL::to_double(he->source()->point().y()), outline_margin))
           return false;
       } while (++he != first);
       return true;
@@ -645,7 +646,7 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
               if (std::all_of(polygons[j].begin(), polygons[j].end(),
                               [&](auto& p) {
                                 return roofer::reconstruction::in_rectangle(
-                                    r, p[0], p[1], alpha_radius / 4);
+                                    r, p[0], p[1], outline_margin);
                               }) &&
                   std::abs(c[2] -
                            roofer::reconstruction::plane_z(pl, c[0], c[1])) <
