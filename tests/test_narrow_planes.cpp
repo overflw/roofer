@@ -230,3 +230,48 @@ TEST_CASE(
     CHECK(labels[i] == (i >= n ? 0 : wall ? 4 : pts[i][1] < 5 ? 1 : 2));
   }
 }
+
+TEST_CASE("a wall's corner takes no width from the wall it meets") {
+  std::vector<std::array<double, 3>> xyz;
+  for (double x = 0.125; x < 10; x += 0.25)
+    for (double y : {4.875, 5.125}) xyz.push_back({x, y, 10.6});
+  for (double y = 5.375; y < 9; y += 0.25)
+    for (double x : {9.875, 10.125}) xyz.push_back({x, y, 10.6});
+  auto runs = narrow_runs(xyz, r, 4 * r, epsilon);
+  REQUIRE(!runs.empty());
+  std::vector<Point2> xy;
+  for (auto i : runs[0]) xy.push_back({xyz[i][0], xyz[i][1]});
+  auto o = narrow_outline(xy, r);
+  REQUIRE(o);
+  CHECK(std::hypot((*o)[3][0] - (*o)[0][0], (*o)[3][1] - (*o)[0][1]) <
+        0.3);
+  CHECK((*o)[0][1] == Catch::Approx((*o)[1][1]).margin(0.01));
+}
+
+TEST_CASE("a wall that meets another runs on to it") {
+  std::vector<std::array<double, 3>> pts;
+  std::vector<int> labels;
+  roof(
+      [](double x, double y) {
+        return std::abs(y - 5) < 0.2 || (std::abs(x - 10) < 0.2 && y > 5)
+                   ? 0.6
+                   : 0.0;
+      },
+      pts, labels);
+  std::unordered_map<int, std::pair<Pl, std::vector<P3>>> planes;
+  for (size_t i = 0; i < pts.size(); ++i)
+    if (labels[i] == 1) {
+      planes[1].first = Pl(0, 0, 1, -10);
+      planes[1].second.emplace_back(pts[i][0], pts[i][1], pts[i][2]);
+    }
+  std::map<size_t, std::map<size_t, size_t>> adjacencies;
+  Footprint footprint;
+  footprint.assign({{0, 0}, {20, 0}, {20, 10}, {0, 10}});
+  auto narrow = narrow_structures(pts, labels, planes, adjacencies, footprint,
+                                  Config{}, r);
+  REQUIRE(narrow.size() == 2);
+  auto& main = narrow.begin()->second;
+  auto& branch = std::next(narrow.begin())->second;
+  for (auto& p : branch)
+    if (p[1] < 6) CHECK(in_rectangle(main, p[0], p[1], 0.01));
+}

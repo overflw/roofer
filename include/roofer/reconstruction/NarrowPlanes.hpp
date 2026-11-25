@@ -47,46 +47,59 @@ namespace roofer::reconstruction {
    * shape of `alpha_radius` breaks a region narrower than about twice that
    * radius into fragments, so a plane whose points spread across it by less
    * than half the radius (standard deviation) and run on at least four times
-   * as long takes the rectangle around them along their main direction.
+   * as long takes the rectangle around them along their main direction,
+   * leaving out the few that lie off their line, as at a corner.
    *
    * @param xy the plane's points in plan
    * @return the rectangle, corners in order, or nothing for a plane that is
    * not narrow
    */
-  inline std::optional<Rectangle> narrow_outline(const std::vector<Point2>& xy,
+  inline std::optional<Rectangle> narrow_outline(std::vector<Point2> xy,
                                                  double alpha_radius) {
-    if (xy.size() < 3) return std::nullopt;
-    double mx = 0, my = 0;
-    for (auto& p : xy) mx += p[0], my += p[1];
-    mx /= xy.size(), my /= xy.size();
-    double sxx = 0, syy = 0, sxy = 0;
-    for (auto& p : xy) {
-      double dx = p[0] - mx, dy = p[1] - my;
-      sxx += dx * dx, syy += dy * dy, sxy += dx * dy;
+    // points off its line, as at a corner with another wall, are left out
+    for (bool trimmed = false;; trimmed = true) {
+      if (xy.size() < 3) return std::nullopt;
+      double mx = 0, my = 0;
+      for (auto& p : xy) mx += p[0], my += p[1];
+      mx /= xy.size(), my /= xy.size();
+      double sxx = 0, syy = 0, sxy = 0;
+      for (auto& p : xy) {
+        double dx = p[0] - mx, dy = p[1] - my;
+        sxx += dx * dx, syy += dy * dy, sxy += dx * dy;
+      }
+      sxx /= xy.size(), syy /= xy.size(), sxy /= xy.size();
+      double t = std::atan2(2 * sxy, sxx - syy) / 2, ux = std::cos(t),
+             uy = std::sin(t);
+      auto v_of = [&](const Point2& p) {
+        return -(p[0] - mx) * uy + (p[1] - my) * ux;
+      };
+      double umin = INFINITY, umax = -INFINITY, vmin = INFINITY,
+             vmax = -INFINITY, vv = 0;
+      for (auto& p : xy) {
+        double u = (p[0] - mx) * ux + (p[1] - my) * uy, v = v_of(p);
+        umin = std::min(umin, u), umax = std::max(umax, u);
+        vmin = std::min(vmin, v), vmax = std::max(vmax, v), vv += v * v;
+      }
+      double spread = std::sqrt(vv / xy.size());
+      if (!trimmed) {
+        if (spread >= alpha_radius / 2) return std::nullopt;
+        std::erase_if(xy, [&](const Point2& p) {
+          return std::abs(v_of(p)) > 2 * spread;
+        });
+        continue;
+      }
+      if (spread >= alpha_radius / 2 || umax - umin < 2 * alpha_radius ||
+          umax - umin < 4 * (vmax - vmin))
+        return std::nullopt;
+      // points on one line (a scan line) still make a rectangle, not a segment
+      double pad = std::max(0.0, alpha_radius / 10 - (vmax - vmin)) / 2;
+      vmin -= pad, vmax += pad;
+      auto at = [&](double u, double v) {
+        return Point2{mx + u * ux - v * uy, my + u * uy + v * ux};
+      };
+      return Rectangle{at(umin, vmin), at(umax, vmin), at(umax, vmax),
+                       at(umin, vmax)};
     }
-    sxx /= xy.size(), syy /= xy.size(), sxy /= xy.size();
-    double t = std::atan2(2 * sxy, sxx - syy) / 2, ux = std::cos(t),
-           uy = std::sin(t);
-    double umin = INFINITY, umax = -INFINITY, vmin = INFINITY, vmax = -INFINITY,
-           vv = 0;
-    for (auto& p : xy) {
-      double u = (p[0] - mx) * ux + (p[1] - my) * uy,
-             v = -(p[0] - mx) * uy + (p[1] - my) * ux;
-      umin = std::min(umin, u), umax = std::max(umax, u);
-      vmin = std::min(vmin, v), vmax = std::max(vmax, v), vv += v * v;
-    }
-    double spread = std::sqrt(vv / xy.size());
-    if (spread >= alpha_radius / 2 || umax - umin < 2 * alpha_radius ||
-        umax - umin < 4 * (vmax - vmin))
-      return std::nullopt;
-    // points on one line (a scan line) still make a rectangle, not a segment
-    double pad = std::max(0.0, alpha_radius / 10 - (vmax - vmin)) / 2;
-    vmin -= pad, vmax += pad;
-    auto at = [&](double u, double v) {
-      return Point2{mx + u * ux - v * uy, my + u * uy + v * ux};
-    };
-    return Rectangle{at(umin, vmin), at(umax, vmin), at(umax, vmax),
-                     at(umin, vmax)};
   }
 
   /**
@@ -594,6 +607,18 @@ namespace roofer::reconstruction {
     }
     for (auto k : short_or_on_border) drop(k);
     if (narrow.empty()) return narrow;
+    // an end short of another structure runs on to it
+    auto before = narrow;
+    for (auto& [k, r] : narrow) {
+      std::vector<std::vector<Point2>> others;
+      for (auto& [l, o] : before)
+        if (l != k && !in_rectangle(o, (r[0][0] + r[3][0]) / 2,
+                                    (r[0][1] + r[3][1]) / 2, 0) &&
+            !in_rectangle(o, (r[1][0] + r[2][0]) / 2,
+                          (r[1][1] + r[2][1]) / 2, 0))
+          others.emplace_back(o.begin(), o.end());
+      r = narrow_to_border(r, others, 4 * alpha_radius);
+    }
     // leftover points go back to their plane, if enough for a dropped one
     std::map<int, size_t> back;
     for (size_t i = 0; i < labels.size(); ++i)
