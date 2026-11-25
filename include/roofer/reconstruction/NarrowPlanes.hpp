@@ -52,8 +52,8 @@ namespace roofer::reconstruction {
    * shape of `alpha_radius` breaks a region narrower than about twice that
    * radius into fragments, so a plane whose points spread across it by less
    * than half the radius (standard deviation) and run on at least four times
-   * as long takes the rectangle around them along their main direction,
-   * leaving out the few that lie off their line, as at a corner.
+   * as long takes the rectangle around them along their main direction; the
+   * few that lie off their line, as at a corner, give it no width.
    *
    * @param xy the plane's points in plan
    * @return the rectangle, corners in order, or nothing for a plane that is
@@ -611,16 +611,23 @@ namespace roofer::reconstruction {
     }
     for (auto k : short_or_on_border) drop(k);
     if (narrow.empty()) return narrow;
-    // an end short of another structure ahead runs on to it
+    // an end short of another structure ahead, or of its line run on to a
+    // corner, runs on to it
+    const double reach = 4 * alpha_radius;
     for (auto& [k, r] : narrow) {
       auto [x0, y0] = mid(r, 0, 3);
       auto [x1, y1] = mid(r, 1, 2);
       std::vector<std::vector<Point2>> others;
       for (auto& [l, o] : narrow)
         if (l != k && !in_rectangle(o, x0, y0, 0) &&
-            !in_rectangle(o, x1, y1, 0))
+            !in_rectangle(o, x1, y1, 0)) {
+          auto [ux, uy, length] = rectangle_axis(o);
+          auto a = mid(o, 0, 3), b = mid(o, 1, 2);
           others.emplace_back(o.begin(), o.end());
-      r = narrow_to_border(r, others, 4 * alpha_radius, false);
+          others.push_back({{a[0] - reach * ux, a[1] - reach * uy},
+                            {b[0] + reach * ux, b[1] + reach * uy}});
+        }
+      r = narrow_to_border(r, others, reach, false);
     }
     // leftover points go back to their plane, if enough for a dropped one
     std::map<int, size_t> back;

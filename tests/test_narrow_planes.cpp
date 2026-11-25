@@ -320,3 +320,26 @@ TEST_CASE("pieces of a wall at two heights meet but do not overlap") {
   double a_hi = std::max(a[0][0], a[1][0]), b_lo = std::min(b[0][0], b[1][0]);
   CHECK(a_hi == Catch::Approx(b_lo).margin(0.01));
 }
+
+TEST_CASE("walls short of their corner both run on to it") {
+  std::vector<std::array<double, 3>> pts;
+  std::vector<int> labels;
+  roof(
+      [](double x, double y) {
+        return (std::abs(y - 5) < 0.2 && x > 3 && x < 9.4) ||
+                       (std::abs(x - 10) < 0.2 && y > 5.6)
+                   ? 0.6
+                   : 0.0;
+      },
+      pts, labels);
+  auto narrow = on_flat_roof(pts, labels);
+  REQUIRE(narrow.size() == 2);
+  double reach_x = 0, reach_y = 10;
+  for (auto& [k, r] : narrow)
+    for (auto& p : r) {
+      if (std::abs(p[1] - 5) < 0.3) reach_x = std::max(reach_x, p[0]);
+      if (std::abs(p[0] - 10) < 0.3) reach_y = std::min(reach_y, p[1]);
+    }
+  CHECK(reach_x > 9.8);
+  CHECK(reach_y < 5.2);
+}
