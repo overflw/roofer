@@ -642,8 +642,11 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
               for (int k = 0; k < 3; ++k) c[k] += p[k] / polygons[j].size();
             for (const auto& [id, r] : narrow) {
               const auto& pl = PlaneDetector->pts_per_roofplane.at(id).first;
-              if (roofer::reconstruction::in_rectangle(r, c[0], c[1],
-                                                       alpha_radius / 10) &&
+              if (std::all_of(polygons[j].begin(), polygons[j].end(),
+                              [&](auto& p) {
+                                return roofer::reconstruction::in_rectangle(
+                                    r, p[0], p[1], alpha_radius / 4);
+                              }) &&
                   std::abs(c[2] -
                            roofer::reconstruction::plane_z(pl, c[0], c[1])) <
                       reconstruction.plane_detector.plane_epsilon / 2) {
