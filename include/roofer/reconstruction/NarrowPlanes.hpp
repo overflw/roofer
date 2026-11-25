@@ -54,20 +54,21 @@ namespace roofer::reconstruction {
    * @return the rectangle, corners in order, or nothing for a plane that is
    * not narrow
    */
-  inline std::optional<Rectangle> narrow_outline(std::vector<Point2> xy,
+  inline std::optional<Rectangle> narrow_outline(const std::vector<Point2>& xy,
                                                  double alpha_radius) {
-    // points off its line, as at a corner with another wall, are left out
+    // points off its line, as at a corner with another wall, give no width
+    auto line = xy;
     for (bool trimmed = false;; trimmed = true) {
-      if (xy.size() < 3) return std::nullopt;
+      if (line.size() < 3) return std::nullopt;
       double mx = 0, my = 0;
-      for (auto& p : xy) mx += p[0], my += p[1];
-      mx /= xy.size(), my /= xy.size();
+      for (auto& p : line) mx += p[0], my += p[1];
+      mx /= line.size(), my /= line.size();
       double sxx = 0, syy = 0, sxy = 0;
-      for (auto& p : xy) {
+      for (auto& p : line) {
         double dx = p[0] - mx, dy = p[1] - my;
         sxx += dx * dx, syy += dy * dy, sxy += dx * dy;
       }
-      sxx /= xy.size(), syy /= xy.size(), sxy /= xy.size();
+      sxx /= line.size(), syy /= line.size(), sxy /= line.size();
       double t = std::atan2(2 * sxy, sxx - syy) / 2, ux = std::cos(t),
              uy = std::sin(t);
       auto v_of = [&](const Point2& p) {
@@ -75,15 +76,18 @@ namespace roofer::reconstruction {
       };
       double umin = INFINITY, umax = -INFINITY, vmin = INFINITY,
              vmax = -INFINITY, vv = 0;
-      for (auto& p : xy) {
-        double u = (p[0] - mx) * ux + (p[1] - my) * uy, v = v_of(p);
-        umin = std::min(umin, u), umax = std::max(umax, u);
+      for (auto& p : line) {
+        double v = v_of(p);
         vmin = std::min(vmin, v), vmax = std::max(vmax, v), vv += v * v;
       }
-      double spread = std::sqrt(vv / xy.size());
+      for (auto& p : xy) {
+        double u = (p[0] - mx) * ux + (p[1] - my) * uy;
+        umin = std::min(umin, u), umax = std::max(umax, u);
+      }
+      double spread = std::sqrt(vv / line.size());
       if (!trimmed) {
         if (spread >= alpha_radius / 2) return std::nullopt;
-        std::erase_if(xy, [&](const Point2& p) {
+        std::erase_if(line, [&](const Point2& p) {
           return std::abs(v_of(p)) > 2 * spread;
         });
         continue;
@@ -182,16 +186,17 @@ namespace roofer::reconstruction {
   }
 
   /**
-   * `r` carried on along its axis to the footprint's border at either end
-   * within `reach` of it: straight on to the border ahead, or as far as the
-   * nearest border point lies ahead (a corner). The faces either side of a
-   * structure stay one unless it reaches the border.
+   * `r` carried on along its axis at either end within `reach` of `rings`:
+   * straight on to the ring ahead, or, with `corners`, as far as the nearest
+   * point of the rings lies ahead (a corner of the footprint). The faces
+   * either side of a structure stay one unless it reaches the border.
    *
-   * @param rings the footprint's rings, each a closed sequence of (x, y)
+   * @param rings closed sequences of (x, y): the footprint's rings, or other
+   * structures' outlines
    */
   inline Rectangle narrow_to_border(
-      Rectangle r, const std::vector<std::vector<Point2>>& rings,
-      double reach) {
+      Rectangle r, const std::vector<std::vector<Point2>>& rings, double reach,
+      bool corners = true) {
     auto carry = [&](Point2 p, double dx, double dy) {
       double best_t = INFINITY;
       for (const auto& ring : rings)
@@ -206,7 +211,7 @@ namespace roofer::reconstruction {
         }
       Point2 q = nearest_on_border(rings, p);
       double near = std::hypot(q[0] - p[0], q[1] - p[1]);
-      if (best_t > reach && near <= reach)
+      if (corners && best_t > reach && near <= reach)
         best_t = (q[0] - p[0]) * dx + (q[1] - p[1]) * dy;
       if (best_t <= 0 || best_t > reach) return p;
       return Point2{p[0] + best_t * dx, p[1] + best_t * dy};
@@ -238,8 +243,9 @@ namespace roofer::reconstruction {
     for (size_t i = 0; i < xyz.size(); ++i) left[i] = i;
     std::vector<size_t> bins;
     while (left.size() >= 3) {
-      double best_t = 0, best_lo = 0;
+      double best_t = 0;
       size_t best_n = 0, best_b = 0;
+      std::vector<size_t> bin_of(left.size()), best_bin_of;
       for (int deg = 0; deg < 180; ++deg) {
         double t = deg * std::numbers::pi / 180, nx = -std::sin(t),
                ny = std::cos(t);
@@ -249,19 +255,21 @@ namespace roofer::reconstruction {
           lo = std::min(lo, s), hi = std::max(hi, s);
         }
         bins.assign(size_t((hi - lo) / bin) + 1, 0);
-        for (auto i : left) {
-          size_t b = (nx * xyz[i][0] + ny * xyz[i][1] - lo) / bin;
+        bool better = false;
+        for (size_t j = 0; j < left.size(); ++j) {
+          auto i = left[j];
+          size_t b = bin_of[j] = (nx * xyz[i][0] + ny * xyz[i][1] - lo) / bin;
           if (++bins[b] > best_n)
-            best_n = bins[b], best_t = t, best_lo = lo, best_b = b;
+            best_n = bins[b], best_t = t, best_b = b, better = true;
         }
+        if (better) best_bin_of = bin_of;
       }
       if (best_n < 3) break;
       double ux = std::cos(best_t), uy = std::sin(best_t), nx = -uy, ny = ux;
       std::vector<double> in_bin;
-      for (auto i : left) {
-        double s = nx * xyz[i][0] + ny * xyz[i][1];
-        if (size_t((s - best_lo) / bin) == best_b) in_bin.push_back(s);
-      }
+      for (size_t j = 0; j < left.size(); ++j)
+        if (best_bin_of[j] == best_b)
+          in_bin.push_back(nx * xyz[left[j]][0] + ny * xyz[left[j]][1]);
       std::nth_element(in_bin.begin(), in_bin.begin() + in_bin.size() / 2,
                        in_bin.end());
       double centre = in_bin[in_bin.size() / 2];
@@ -607,17 +615,17 @@ namespace roofer::reconstruction {
     }
     for (auto k : short_or_on_border) drop(k);
     if (narrow.empty()) return narrow;
-    // an end short of another structure runs on to it
-    auto before = narrow;
+    // an end short of another structure ahead runs on to it
     for (auto& [k, r] : narrow) {
       std::vector<std::vector<Point2>> others;
-      for (auto& [l, o] : before)
-        if (l != k && !in_rectangle(o, (r[0][0] + r[3][0]) / 2,
-                                    (r[0][1] + r[3][1]) / 2, 0) &&
-            !in_rectangle(o, (r[1][0] + r[2][0]) / 2,
-                          (r[1][1] + r[2][1]) / 2, 0))
+      for (auto& [l, o] : narrow)
+        if (l != k &&
+            !in_rectangle(o, (r[0][0] + r[3][0]) / 2, (r[0][1] + r[3][1]) / 2,
+                          0) &&
+            !in_rectangle(o, (r[1][0] + r[2][0]) / 2, (r[1][1] + r[2][1]) / 2,
+                          0))
           others.emplace_back(o.begin(), o.end());
-      r = narrow_to_border(r, others, 4 * alpha_radius);
+      r = narrow_to_border(r, others, 4 * alpha_radius, false);
     }
     // leftover points go back to their plane, if enough for a dropped one
     std::map<int, size_t> back;

@@ -243,8 +243,7 @@ TEST_CASE("a wall's corner takes no width from the wall it meets") {
   for (auto i : runs[0]) xy.push_back({xyz[i][0], xyz[i][1]});
   auto o = narrow_outline(xy, r);
   REQUIRE(o);
-  CHECK(std::hypot((*o)[3][0] - (*o)[0][0], (*o)[3][1] - (*o)[0][1]) <
-        0.3);
+  CHECK(std::hypot((*o)[3][0] - (*o)[0][0], (*o)[3][1] - (*o)[0][1]) < 0.3);
   CHECK((*o)[0][1] == Catch::Approx((*o)[1][1]).margin(0.01));
 }
 
@@ -253,9 +252,8 @@ TEST_CASE("a wall that meets another runs on to it") {
   std::vector<int> labels;
   roof(
       [](double x, double y) {
-        return std::abs(y - 5) < 0.2 || (std::abs(x - 10) < 0.2 && y > 5)
-                   ? 0.6
-                   : 0.0;
+        return std::abs(y - 5) < 0.2 || (std::abs(x - 10) < 0.2 && y > 5) ? 0.6
+                                                                          : 0.0;
       },
       pts, labels);
   std::unordered_map<int, std::pair<Pl, std::vector<P3>>> planes;
@@ -274,4 +272,53 @@ TEST_CASE("a wall that meets another runs on to it") {
   auto& branch = std::next(narrow.begin())->second;
   for (auto& p : branch)
     if (p[1] < 6) CHECK(in_rectangle(main, p[0], p[1], 0.01));
+}
+
+TEST_CASE("a wall runs on only to a structure straight ahead") {
+  Rectangle k{Point2{0, 4.9}, Point2{10, 4.9}, Point2{10, 5.1}, Point2{0, 5.1}};
+  std::vector<std::vector<Point2>> beside{
+      {{11.5, 5.9}, {20, 5.9}, {20, 6.1}, {11.5, 6.1}}};
+  auto r1 = narrow_to_border(k, beside, 4 * 0.55, false);
+  CHECK(r1[1][0] == Catch::Approx(10));
+  std::vector<std::vector<Point2>> ahead{
+      {{11, 4.9}, {20, 4.9}, {20, 5.1}, {11, 5.1}}};
+  auto r2 = narrow_to_border(k, ahead, 4 * 0.55, false);
+  CHECK(r2[1][0] == Catch::Approx(11));
+}
+
+TEST_CASE("a wall keeps the ends of its points off its line") {
+  std::vector<Point2> xy;
+  for (double x = 0; x < 10; x += 0.25)
+    for (double y : {-0.1, 0.1}) xy.push_back({x, y});
+  for (double x = 10; x <= 10.5; x += 0.25) xy.push_back({x, 0.4});
+  auto o = narrow_outline(xy, r);
+  REQUIRE(o);
+  CHECK(std::max((*o)[1][0], (*o)[0][0]) == Catch::Approx(10.5).margin(0.01));
+}
+
+TEST_CASE("pieces of a wall at two heights meet but do not overlap") {
+  std::vector<std::array<double, 3>> pts;
+  std::vector<int> labels;
+  roof(
+      [](double x, double y) {
+        if (std::abs(y - 5) >= 0.2) return 0.0;
+        return x < 9 ? 0.6 : x > 10 ? 1.2 : 0.0;
+      },
+      pts, labels);
+  std::unordered_map<int, std::pair<Pl, std::vector<P3>>> planes;
+  for (size_t i = 0; i < pts.size(); ++i)
+    if (labels[i] == 1) {
+      planes[1].first = Pl(0, 0, 1, -10);
+      planes[1].second.emplace_back(pts[i][0], pts[i][1], pts[i][2]);
+    }
+  std::map<size_t, std::map<size_t, size_t>> adjacencies;
+  Footprint footprint;
+  footprint.assign({{0, 0}, {20, 0}, {20, 10}, {0, 10}});
+  auto narrow = narrow_structures(pts, labels, planes, adjacencies, footprint,
+                                  Config{}, r);
+  REQUIRE(narrow.size() == 2);
+  auto& a = narrow.begin()->second;
+  auto& b = std::next(narrow.begin())->second;
+  double a_hi = std::max(a[0][0], a[1][0]), b_lo = std::min(b[0][0], b[1][0]);
+  CHECK(a_hi == Catch::Approx(b_lo).margin(0.01));
 }
