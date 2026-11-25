@@ -282,16 +282,17 @@ TEST_CASE("a wall that meets another runs on to it") {
     if (p[1] < 6) CHECK(in_rectangle(main, p[0], p[1], 0.01));
 }
 
-TEST_CASE("a wall runs on only to a structure straight ahead") {
+TEST_CASE("a wall runs on across a wall it meets, not beside one") {
   Rectangle k{Point2{0, 4.9}, Point2{10, 4.9}, Point2{10, 5.1}, Point2{0, 5.1}};
-  std::vector<std::vector<Point2>> beside{
-      {{11.5, 5.9}, {20, 5.9}, {20, 6.1}, {11.5, 6.1}}};
-  auto r1 = narrow_to_border(k, beside, 4 * 0.55, false);
+  Rectangle beside{Point2{11.5, 5.9}, Point2{20, 5.9}, Point2{20, 6.1},
+                   Point2{11.5, 6.1}};
+  auto r1 = narrow_to_crossing(k, {beside}, 4 * 0.55);
   CHECK(r1[1][0] == Catch::Approx(10));
-  std::vector<std::vector<Point2>> ahead{
-      {{11, 4.9}, {20, 4.9}, {20, 5.1}, {11, 5.1}}};
-  auto r2 = narrow_to_border(k, ahead, 4 * 0.55, false);
+  Rectangle across{Point2{11, 6}, Point2{11, 9}, Point2{10.6, 9},
+                   Point2{10.6, 6}};
+  auto r2 = narrow_to_crossing(k, {across}, 4 * 0.55);
   CHECK(r2[1][0] == Catch::Approx(11));
+  CHECK(r2[0][0] == Catch::Approx(0));
 }
 
 TEST_CASE("a wall keeps the ends of its points off its line") {
@@ -304,7 +305,7 @@ TEST_CASE("a wall keeps the ends of its points off its line") {
   CHECK(std::max((*o)[1][0], (*o)[0][0]) == Catch::Approx(10.5).margin(0.01));
 }
 
-TEST_CASE("pieces of a wall at two heights meet but do not overlap") {
+TEST_CASE("pieces of a wall at two heights do not overlap") {
   std::vector<std::array<double, 3>> pts;
   std::vector<int> labels;
   roof(
@@ -318,7 +319,7 @@ TEST_CASE("pieces of a wall at two heights meet but do not overlap") {
   auto& a = narrow.begin()->second;
   auto& b = std::next(narrow.begin())->second;
   double a_hi = std::max(a[0][0], a[1][0]), b_lo = std::min(b[0][0], b[1][0]);
-  CHECK(a_hi == Catch::Approx(b_lo).margin(0.01));
+  CHECK(a_hi <= b_lo + 0.01);
 }
 
 TEST_CASE("walls short of their corner both run on to it") {
@@ -342,4 +343,7 @@ TEST_CASE("walls short of their corner both run on to it") {
     }
   CHECK(reach_x > 9.8);
   CHECK(reach_y < 5.2);
+  bool corner = false;  // the outer corner of the wall top
+  for (auto& [k, r] : narrow) corner |= in_rectangle(r, 10.1, 4.9, 0);
+  CHECK(corner);
 }

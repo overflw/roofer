@@ -186,19 +186,29 @@ namespace roofer::reconstruction {
     return q;
   }
 
+  // `r` with its ends carried along its axis by `carry(end, direction)`.
+  template <typename Carry>
+  Rectangle carry_ends(const Rectangle& r, Carry carry) {
+    auto [ux, uy, l] = rectangle_axis(r);
+    double hx = (r[3][0] - r[0][0]) / 2, hy = (r[3][1] - r[0][1]) / 2;
+    auto e0 = carry(mid(r, 0, 3), -ux, -uy), e1 = carry(mid(r, 1, 2), ux, uy);
+    return Rectangle{
+        Point2{e0[0] - hx, e0[1] - hy}, Point2{e1[0] - hx, e1[1] - hy},
+        Point2{e1[0] + hx, e1[1] + hy}, Point2{e0[0] + hx, e0[1] + hy}};
+  }
+
   /**
-   * `r` carried on along its axis at either end within `reach` of `rings`:
-   * straight on to the ring ahead, or, with `corners`, as far as the nearest
-   * point of the rings lies ahead (a corner of the footprint). The faces
-   * either side of a structure stay one unless it reaches the border.
+   * `r` carried on along its axis to the footprint's border at either end
+   * within `reach` of it: straight on to the border ahead, or as far as the
+   * nearest border point lies ahead (a corner). The faces either side of a
+   * structure stay one unless it reaches the border.
    *
-   * @param rings closed sequences of (x, y): the footprint's rings, or other
-   * structures' outlines
+   * @param rings the footprint's rings, each a closed sequence of (x, y)
    */
   inline Rectangle narrow_to_border(
-      Rectangle r, const std::vector<std::vector<Point2>>& rings, double reach,
-      bool corners = true) {
-    auto carry = [&](Point2 p, double dx, double dy) {
+      const Rectangle& r, const std::vector<std::vector<Point2>>& rings,
+      double reach) {
+    return carry_ends(r, [&](Point2 p, double dx, double dy) {
       double best_t = INFINITY;
       for (const auto& ring : rings)
         for (size_t i = 0; i < ring.size(); ++i) {
@@ -210,20 +220,39 @@ namespace roofer::reconstruction {
             if (t >= 0 && s >= 0 && s <= 1) best_t = std::min(best_t, t);
           }
         }
-      if (corners && best_t > reach) {
-        Point2 q = nearest_on_border(rings, p);
-        if (std::hypot(q[0] - p[0], q[1] - p[1]) <= reach)
-          best_t = (q[0] - p[0]) * dx + (q[1] - p[1]) * dy;
-      }
+      Point2 q = nearest_on_border(rings, p);
+      if (best_t > reach && std::hypot(q[0] - p[0], q[1] - p[1]) <= reach)
+        best_t = (q[0] - p[0]) * dx + (q[1] - p[1]) * dy;
       if (best_t <= 0 || best_t > reach) return p;
       return Point2{p[0] + best_t * dx, p[1] + best_t * dy};
-    };
-    auto [ux, uy, l] = rectangle_axis(r);
-    double hx = (r[3][0] - r[0][0]) / 2, hy = (r[3][1] - r[0][1]) / 2;
-    auto e0 = carry(mid(r, 0, 3), -ux, -uy), e1 = carry(mid(r, 1, 2), ux, uy);
-    return Rectangle{
-        Point2{e0[0] - hx, e0[1] - hy}, Point2{e1[0] - hx, e1[1] - hy},
-        Point2{e1[0] + hx, e1[1] + hy}, Point2{e0[0] + hx, e0[1] + hy}};
+    });
+  }
+
+  /**
+   * `r` carried on along its axis at either end across another structure
+   * whose line, run on by `reach`, it meets, to that structure's far side
+   * within `reach`: walls meeting at a T or a corner join.
+   */
+  inline Rectangle narrow_to_crossing(const Rectangle& r,
+                                      const std::vector<Rectangle>& others,
+                                      double reach) {
+    return carry_ends(r, [&](Point2 p, double dx, double dy) {
+      double best = INFINITY;
+      for (const auto& o : others) {
+        auto [ox, oy, l] = rectangle_axis(o);
+        auto a = mid(o, 0, 3);
+        double den = dx * oy - dy * ox, ax = a[0] - p[0], ay = a[1] - p[1];
+        if (std::abs(den) < 1e-9) continue;
+        double s = (ax * dy - ay * dx) / den,
+               far = (ax * oy - ay * ox) / den +
+                     std::hypot(o[3][0] - o[0][0], o[3][1] - o[0][1]) / 2 /
+                         std::abs(den);
+        if (s >= -reach && s <= l + reach && far > 0 && far <= reach)
+          best = std::min(best, far);
+      }
+      if (best == INFINITY) return p;
+      return Point2{p[0] + best * dx, p[1] + best * dy};
+    });
   }
 
   /**
@@ -611,23 +640,12 @@ namespace roofer::reconstruction {
     }
     for (auto k : short_or_on_border) drop(k);
     if (narrow.empty()) return narrow;
-    // an end short of another structure ahead, or of its line run on to a
-    // corner, runs on to it
-    const double reach = 4 * alpha_radius;
+    // walls meeting at a T or a corner join
     for (auto& [k, r] : narrow) {
-      auto [x0, y0] = mid(r, 0, 3);
-      auto [x1, y1] = mid(r, 1, 2);
-      std::vector<std::vector<Point2>> others;
+      std::vector<Rectangle> others;
       for (auto& [l, o] : narrow)
-        if (l != k && !in_rectangle(o, x0, y0, 0) &&
-            !in_rectangle(o, x1, y1, 0)) {
-          auto [ux, uy, length] = rectangle_axis(o);
-          auto a = mid(o, 0, 3), b = mid(o, 1, 2);
-          others.emplace_back(o.begin(), o.end());
-          others.push_back({{a[0] - reach * ux, a[1] - reach * uy},
-                            {b[0] + reach * ux, b[1] + reach * uy}});
-        }
-      r = narrow_to_border(r, others, reach, false);
+        if (l != k) others.push_back(o);
+      r = narrow_to_crossing(r, others, 4 * alpha_radius);
     }
     // leftover points go back to their plane, if enough for a dropped one
     std::map<int, size_t> back;
