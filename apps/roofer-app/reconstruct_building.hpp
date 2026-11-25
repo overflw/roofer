@@ -777,45 +777,29 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
     auto optimiser_config = reconstruction.arrangement_optimiser;
     optimiser_config.use_ground =
         !building.pointcloud_ground.empty() && reconstruction.clip_terrain;
-    ArrangementOptimiser->compute(arrangement, SegmentRasteriser->heightfield,
-                                  PlaneDetector->pts_per_roofplane,
-                                  PlaneDetector_ground->pts_per_roofplane,
-                                  optimiser_config);
+    // A narrow plane can fit a cell off its outline as well as the roof does,
+    // so it labels only the cells on it.
+    auto on_outline = [&](roofer::Arrangement_2::Face_handle f, int id) {
+      auto n = narrow.find(id);
+      if (n == narrow.end()) return true;
+      double cx = 0, cy = 0;
+      int count = 0;
+      auto he = f->outer_ccb(), first = he;
+      do {
+        cx += CGAL::to_double(he->source()->point().x());
+        cy += CGAL::to_double(he->source()->point().y());
+        ++count;
+      } while (++he != first);
+      return roofer::reconstruction::in_rectangle(n->second, cx / count,
+                                                  cy / count, 0);
+    };
+    ArrangementOptimiser->compute(
+        arrangement, SegmentRasteriser->heightfield,
+        PlaneDetector->pts_per_roofplane,
+        PlaneDetector_ground->pts_per_roofplane, optimiser_config,
+        narrow.empty() ? nullptr : std::function(on_outline));
     timings["ArrangementOptimiser"] =
         std::chrono::high_resolution_clock::now() - t0;
-    // A narrow plane can fit a cell off its outline as well as the roof
-    // does; there the cell takes the roof plane that fits it best.
-    if (!narrow.empty()) {
-      std::vector<std::pair<int, roofer::Plane>>
-          roof_labels;  // the optimiser's
-      for (auto& [k, v] : PlaneDetector->pts_per_roofplane)
-        if (k >= 1) roof_labels.emplace_back(k, v.first);
-      for (auto f : arrangement.face_handles()) {
-        auto n = narrow.find(f->data().segid);
-        if (!f->data().in_footprint || n == narrow.end()) continue;
-        double cx = 0, cy = 0;
-        int count = 0;
-        auto he = f->outer_ccb(), first = he;
-        do {
-          cx += CGAL::to_double(he->source()->point().x());
-          cy += CGAL::to_double(he->source()->point().y());
-          ++count;
-        } while (++he != first);
-        if (roofer::reconstruction::in_rectangle(n->second, cx / count,
-                                                 cy / count, 0))
-          continue;
-        const auto& cost = f->data().vertex_label_cost;
-        size_t best = cost.size();
-        for (size_t i = 0; i < roof_labels.size() && i < cost.size(); ++i)
-          if (!narrow.count(roof_labels[i].first) &&
-              (best == cost.size() || cost[i] < cost[best]))
-            best = i;
-        if (best == cost.size()) continue;
-        f->data().label = best;
-        f->data().segid = roof_labels[best].first;
-        f->data().plane = roof_labels[best].second;
-      }
-    }
     // logger.debug("Completed ArrangementOptimiser");
     // rec.log("world/optimised_partition", rerun::LineStrips3D(
     // roofer::reconstruction::arr2polygons(arrangement) ));

@@ -20,6 +20,7 @@
 // Ravi Peters
 
 #pragma once
+#include <functional>
 #include <memory>
 #include <roofer/common/Raster.hpp>
 #include <roofer/common/datastructures.hpp>
@@ -73,7 +74,10 @@ namespace roofer::reconstruction {
         Arrangement_2& arrangement, const RasterTools::Raster& heightfield,
         const IndexedPlanesWithPoints& roof_planes,
         const IndexedPlanesWithPoints& ground_planes,
-        ArrangementOptimiserConfig config = ArrangementOptimiserConfig()) = 0;
+        ArrangementOptimiserConfig config = ArrangementOptimiserConfig(),
+        // whether a roof plane may label a face; one that may not costs it
+        // more than any other label
+        std::function<bool(Arrangement_2::Face_handle, int)> allowed = {}) = 0;
   };
 
   std::vector<LinearRing> arr2polygons(Arrangement_2& arr);

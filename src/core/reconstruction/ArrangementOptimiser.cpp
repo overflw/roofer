@@ -218,7 +218,8 @@ namespace roofer::reconstruction {
     void compute(Arrangement_2& arr, const RasterTools::Raster& heightfield,
                  const IndexedPlanesWithPoints& roof_planes,
                  const IndexedPlanesWithPoints& ground_planes,
-                 ArrangementOptimiserConfig cfg) override {
+                 ArrangementOptimiserConfig cfg,
+                 std::function<bool(Arrangement_2::Face_handle, int)> allowed) override {
       std::vector<std::tuple<Plane, size_t>>
           points_per_plane;  // plane, points, seg_id
       for (const auto& [plane_id, plane_pts] : roof_planes) {
@@ -271,6 +272,12 @@ namespace roofer::reconstruction {
           }
         }
       }
+      if (allowed)
+        for (auto face : faces)
+          for (size_t i = 0; i < roofplane_cnt; ++i)
+            if (!allowed(face, std::get<1>(points_per_plane[i])))
+              face->data().vertex_label_cost[i] =
+                  1e3 * (cfg.normalise ? 1 : max_cost);
 
       // std::cerr << "  Graph-cut with " << faces.size() << " faces and " <<
       // points_per_plane.size() << " plane labels\n"; don't bother if there are
