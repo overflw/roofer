@@ -140,7 +140,8 @@ TEST_CASE("points on one line make a rectangle with a width") {
         Catch::Approx(r / 10));
 }
 
-TEST_CASE("a line on a ridge's flank is no wall, a wall on a flat roof is") {
+TEST_CASE(
+    "a wall stands over the roof on both sides, a ridge's flank does not") {
   Rectangle line{Point2{2, 4.9}, Point2{18, 4.9}, Point2{18, 5.1},
                  Point2{2, 5.1}};
   std::vector<std::array<double, 3>> flank, wall;
@@ -149,8 +150,8 @@ TEST_CASE("a line on a ridge's flank is no wall, a wall on a flat roof is") {
       flank.push_back({x, y, 10 + 0.8 * y});
       wall.push_back({x, y, std::abs(y - 5) < 0.2 ? 10.6 : 10.0});
     }
-  CHECK(narrow_on_flank(narrow_profile(flank, line, r), epsilon));
-  CHECK_FALSE(narrow_on_flank(narrow_profile(wall, line, r), epsilon));
+  auto f = narrow_profile(flank, line, r);
+  CHECK(f[1] - std::fmax(f[0], f[2]) < 0);
   auto m = narrow_profile(wall, line, r);
   CHECK(m[1] - std::fmax(m[0], m[2]) == Catch::Approx(0.6));
 }

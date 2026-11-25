@@ -408,12 +408,7 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
     //         "world/segmented_points",
     //         rerun::Points3D(points_roof).with_class_ids(PlaneDetector->plane_id));
     // #endif
-    // Narrow structures (narrow-planes): a wall's top, a parapet is too
-    // narrow for the region grower, its points stay unsegmented or form
-    // narrow planes of their own. Those standing above the roof beside them
-    // are split into straight runs, each a plane outlined by its rectangle,
-    // too narrow for an alpha shape: as triangles in the heightfield and as
-    // lines in the arrangement.
+    // narrow-planes: wall tops and parapets as planes outlined by rectangles
     std::map<int, roofer::reconstruction::Rectangle> narrow;
     const double alpha_radius = std::sqrt(reconstruction.alpha_shaper.alpha);
     if (reconstruction.plane_detector.narrow_planes) {
@@ -446,7 +441,7 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
           pts, labels, 2 * alpha_radius, pd.plane_epsilon, steep);
       std::map<int, std::array<size_t, 2>> standing;
       for (size_t i = 0; i < labels.size(); ++i)
-        if (labels[i] > 0) {
+        if (labels[i] > 0 && planes.count(labels[i])) {
           auto& s = standing[labels[i]];
           s[0] += stands[i], s[1] += 1;
         }
@@ -461,11 +456,9 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
         auto o = roofer::reconstruction::narrow_outline(xy, alpha_radius);
         if (!o) return false;
         auto m = roofer::reconstruction::narrow_profile(pts, *o, alpha_radius);
-        return m[1] - std::fmax(m[0], m[2]) >= pd.narrow_min_height &&
-               !roofer::reconstruction::narrow_on_flank(m, pd.plane_epsilon);
+        return m[1] - std::fmax(m[0], m[2]) >= pd.narrow_min_height;
       };
-      // the narrow runs of a plane standing on the roof, the tops of walls of
-      // one height, go to the loose points; the plane keeps the rest, if enough
+      // a standing plane's narrow runs go loose, it keeps the rest if enough
       std::vector<bool> released(labels.size(), false);
       const auto labels0 = labels;
       const auto planes0 = planes;
@@ -577,7 +570,7 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
         double length = std::hypot(r[1][0] - r[0][0], r[1][1] - r[0][1]);
         auto m = roofer::reconstruction::narrow_profile(pts, r, alpha_radius);
         bool isolated = inside(r[0]) && inside(r[1]) &&
-                        !(std::abs(m[0] - m[2]) > pd.narrow_min_height);
+                        std::abs(m[0] - m[2]) <= pd.narrow_min_height;
         if (length < 4 * alpha_radius ||
             (isolated && length < pd.narrow_min_length) ||
             !(inside(mid(0, 2)) || inside(mid(0, 3)) || inside(mid(1, 2))))
@@ -589,8 +582,7 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
         planes = planes0;
         PlaneDetector->plane_adjacencies = adjacencies0;
       } else {
-        // points left in no narrow structure go back to their plane, to a
-        // dropped one only if they are enough for it
+        // leftover points go back to their plane, if enough for a dropped one
         std::map<int, size_t> back;
         for (size_t i = 0; i < labels.size(); ++i)
           if (labels[i] == 0 && labels0[i] > 0 && planes0.count(labels0[i]))
@@ -782,8 +774,7 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
     auto optimiser_config = reconstruction.arrangement_optimiser;
     optimiser_config.use_ground =
         !building.pointcloud_ground.empty() && reconstruction.clip_terrain;
-    // A narrow plane can fit a cell off its outline as well as the roof does,
-    // so it labels only the cells within it.
+    // a narrow plane labels only cells within its outline
     auto on_outline = [&](roofer::Arrangement_2::Face_handle f, int id) {
       auto n = narrow.find(id);
       if (n == narrow.end()) return true;

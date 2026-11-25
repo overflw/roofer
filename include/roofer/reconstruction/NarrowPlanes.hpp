@@ -403,20 +403,6 @@ namespace roofer::reconstruction {
     return m;
   }
 
-  /**
-   * Whether a profile (`narrow_profile`) lies on the flank of a broader
-   * ridge: across it, the roof rises on one side about as much as it falls
-   * on the other (both by more than `step`, the larger less than twice the
-   * smaller). A wall stands over the roof on one side at least.
-   */
-  inline bool narrow_on_flank(const std::array<double, 3>& m, double step) {
-    double rise = m[1] - m[0], on = m[2] - m[1];
-    if (std::isnan(rise) || std::isnan(on)) return false;
-    return rise * on > 0 && std::min(std::abs(rise), std::abs(on)) > step &&
-           std::max(std::abs(rise), std::abs(on)) <
-               2 * std::min(std::abs(rise), std::abs(on));
-  }
-
   // Whether (x, y) lies in `r`, within `margin`.
   inline bool in_rectangle(const Rectangle& r, double x, double y,
                            double margin) {
