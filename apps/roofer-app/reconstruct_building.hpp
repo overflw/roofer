@@ -416,7 +416,6 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
           building.pointcloud_building, PlaneDetector->plane_id,
           PlaneDetector->pts_per_roofplane, PlaneDetector->plane_adjacencies,
           building.footprint, reconstruction.plane_detector, alpha_radius);
-      building.roof_n_planes = PlaneDetector->pts_per_roofplane.size();
       timings["NarrowPlanes"] = std::chrono::high_resolution_clock::now() - t0;
     }
 

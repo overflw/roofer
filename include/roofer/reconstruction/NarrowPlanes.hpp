@@ -431,7 +431,7 @@ namespace roofer::reconstruction {
                                              Planes& planes0,
                                              Adjacencies& adjacencies0,
                                              const Footprint& footprint,
-                                             const Config& pd,
+                                             const Config& config,
                                              double alpha_radius) {
     using Plane = typename Planes::mapped_type::first_type;
     auto labels = labels0;
@@ -455,11 +455,11 @@ namespace roofer::reconstruction {
     std::set<int> steep;
     for (auto& [k, v] : planes)
       if (std::abs(v.first.c()) <
-          std::cos(pd.narrow_max_slope * std::numbers::pi / 180) *
+          std::cos(config.narrow_max_slope * std::numbers::pi / 180) *
               std::hypot(v.first.a(), v.first.b(), v.first.c()))
         steep.insert(k);
     auto stands =
-        standing(pts, labels, 2 * alpha_radius, pd.plane_epsilon, steep);
+        standing(pts, labels, 2 * alpha_radius, config.plane_epsilon, steep);
     std::map<int, std::array<size_t, 2>> stand_count;
     for (size_t i = 0; i < labels.size(); ++i)
       if (labels[i] > 0 && planes.count(labels[i])) {
@@ -467,19 +467,22 @@ namespace roofer::reconstruction {
         s[0] += stands[i], s[1] += 1;
       }
     auto runs = [&](const std::vector<std::array<double, 3>>& xyz) {
-      return narrow_runs(xyz, alpha_radius, 4 * alpha_radius, pd.plane_epsilon);
+      return narrow_runs(xyz, alpha_radius, 4 * alpha_radius,
+                         config.plane_epsilon);
     };
     // a run's outline, if it is narrow and stands over the roof on both sides
     auto outline = [&](const std::vector<std::array<double, 3>>& xyz,
                        const std::vector<size_t>& run) {
       std::vector<Point2> xy;
       for (auto i : run) xy.push_back({xyz[i][0], xyz[i][1]});
-      auto o = narrow_outline(xy, alpha_radius);
-      if (o) {
-        auto m = narrow_profile(pts, *o, alpha_radius);
-        if (!(m[1] - std::fmax(m[0], m[2]) >= pd.narrow_min_height)) o.reset();
+      auto rect = narrow_outline(xy, alpha_radius);
+      if (rect) {
+        auto profile = narrow_profile(pts, *rect, alpha_radius);
+        if (!(profile[1] - std::fmax(profile[0], profile[2]) >=
+              config.narrow_min_height))
+          rect.reset();
       }
-      return o;
+      return rect;
     };
     // a standing plane's narrow runs go loose, it keeps the rest if enough
     std::vector<bool> released(labels.size(), false);
@@ -496,7 +499,7 @@ namespace roofer::reconstruction {
         if (outline(xyz, run))
           for (auto j : run) labels[index[j]] = 0, released[index[j]] = true;
       refill(k);
-      if (planes[k].second.size() < size_t(pd.min_plane_points)) drop(k);
+      if (planes[k].second.size() < size_t(config.min_plane_points)) drop(k);
     }
     std::vector<size_t> loose;
     std::vector<std::array<double, 3>> xyz;
@@ -508,14 +511,14 @@ namespace roofer::reconstruction {
     int id = 0;  // past every plane, also those dropped above
     for (auto& [k, v] : planes0) id = std::max(id, k);
     for (auto& run : runs(xyz)) {
-      auto o = outline(xyz, run);
-      if (!o) continue;
+      auto rect = outline(xyz, run);
+      if (!rect) continue;
       ++id;
       for (auto i : run) {
         planes[id].second.emplace_back(xyz[i][0], xyz[i][1], xyz[i][2]);
         labels[loose[i]] = id;
       }
-      narrow[id] = *o;
+      narrow[id] = *rect;
     }
     auto level_across = [&](int k) {
       std::vector<std::array<double, 3>> xyz;
@@ -537,7 +540,7 @@ namespace roofer::reconstruction {
                  y = (a->second[0][1] + b->second[2][1]) / 2;
           if (!narrow_in_line(a->second, b->second, alpha_radius) ||
               std::abs(height(a->first, x, y) - height(b->first, x, y)) >
-                  pd.plane_epsilon)
+                  config.plane_epsilon)
             continue;
           std::vector<Point2> xy;
           for (auto k : {a->first, b->first})
@@ -571,7 +574,7 @@ namespace roofer::reconstruction {
     for (auto& [k, r] : narrow) {
       r = narrow_extend(
           r, unsegmented, [&](double x, double y) { return height(k, x, y); },
-          pd.plane_epsilon, 2 * alpha_radius);
+          config.plane_epsilon, 2 * alpha_radius);
       r = narrow_to_border(r, rings, 4 * alpha_radius);
       auto mid = [&](int i, int j) {
         return Point2{(r[i][0] + r[j][0]) / 2, (r[i][1] + r[j][1]) / 2};
@@ -580,11 +583,12 @@ namespace roofer::reconstruction {
         return to_border(rings, p[0], p[1]) > 2 * alpha_radius;
       };
       double length = std::hypot(r[1][0] - r[0][0], r[1][1] - r[0][1]);
-      auto m = narrow_profile(pts, r, alpha_radius);
-      bool isolated = inside(mid(0, 3)) && inside(mid(1, 2)) &&
-                      std::abs(m[0] - m[2]) <= pd.narrow_min_height;
+      auto profile = narrow_profile(pts, r, alpha_radius);
+      bool isolated =
+          inside(mid(0, 3)) && inside(mid(1, 2)) &&
+          std::abs(profile[0] - profile[2]) <= config.narrow_min_height;
       if (length < 4 * alpha_radius ||
-          (isolated && length < pd.narrow_min_length) ||
+          (isolated && length < config.narrow_min_length) ||
           !(inside(mid(0, 2)) || inside(mid(0, 3)) || inside(mid(1, 2))))
         short_or_on_border.push_back(k);
     }
@@ -597,7 +601,7 @@ namespace roofer::reconstruction {
         ++back[labels0[i]];
     for (auto [k, n] : back) {
       bool dropped = !planes.count(k);
-      if (dropped && n < size_t(pd.min_plane_points)) continue;
+      if (dropped && n < size_t(config.min_plane_points)) continue;
       for (size_t i = 0; i < labels.size(); ++i)
         if (labels[i] == 0 && labels0[i] == k) labels[i] = k;
       planes[k].first = planes0.at(k).first;
