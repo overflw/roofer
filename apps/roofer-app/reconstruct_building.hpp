@@ -604,7 +604,9 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
             if (labels[i] == k)
               kept.emplace_back(pts[i][0], pts[i][1], pts[i][2]);
           if (!dropped) continue;
-          if (adjacencies0.count(k)) adjacencies[k] = adjacencies0.at(k);
+          if (adjacencies0.count(k))
+            for (auto& [l, n] : adjacencies0.at(k))
+              if (planes.count(l)) adjacencies[k][l] = n;
           for (auto& [l, adjacent] : adjacencies0)
             if (adjacent.count(k) && planes.count(l))
               adjacencies[l][k] = adjacent.at(k);
