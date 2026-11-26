@@ -30,7 +30,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <functional>
-#include <numbers>
 #include <roofer/reconstruction/PlaneDetector.hpp>
 #include <roofer/reconstruction/PlaneDetectorBase.hpp>
 #include <utility>
@@ -285,8 +284,7 @@ namespace roofer {
           }
           if (cfg.merge_coplanar) {
             planedect::merge_coplanar_regions(
-                PDS, R.regions, R.adjacencies,
-                cfg.merge_max_angle * std::numbers::pi / 180.0,
+                PDS, R.regions, R.adjacencies, cfg.merge_max_angle,
                 cfg.merge_off_distance, cfg.merge_rms_slack);
           }
           total_plane_cnt = R.regions.size();

@@ -2,7 +2,6 @@
 #include <roofer/reconstruction/PlaneDetectorBase.hpp>
 
 #include <map>
-#include <numbers>
 #include <random>
 #include <vector>
 
@@ -35,8 +34,8 @@ namespace {
       for (auto& region : regions)
         if (region.get_region_id() != 0)
           pds.fit_plane(region.inliers, region.plane);
-      return planedect::merge_coplanar_regions(
-          pds, regions, adjacencies, 20 * std::numbers::pi / 180, 0.15, 0.02);
+      return planedect::merge_coplanar_regions(pds, regions, adjacencies, 20,
+                                               0.15, 0.02);
     }
   };
 }  // namespace

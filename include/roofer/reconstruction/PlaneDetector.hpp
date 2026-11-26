@@ -85,7 +85,7 @@ namespace roofer::reconstruction {
   X(int, max_plane_count, 900, "Maximum detected planes before aborting.",     \
     config::greater_than(0), public_)                                          \
   X(bool, merge_coplanar, false,                                               \
-    "Merge adjacent region-grown planes that one plane fits about as well.",  \
+    "Merge adjacent region-grown planes that one plane fits about as well.",   \
     config::no_validation<bool>(), public_)                                    \
   X(float, merge_max_angle, 20.0F,                                             \
     "Maximum angle between planes to merge, in degrees.",                      \

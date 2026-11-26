@@ -143,8 +143,6 @@ namespace roofer {
       double off_share, rms;
     };
 
-    // The share of the points `idx` farther than `off` from `plane`, and
-    // their rms distance to it.
     inline PlaneFit plane_fit(PlaneDS& cds, const std::vector<size_t>& idx,
                               const Plane& plane, double off) {
       size_t n_off = 0;
@@ -158,21 +156,10 @@ namespace roofer {
       return {double(n_off) / idx.size(), std::sqrt(sum / idx.size())};
     }
 
-    /**
-     * Merge adjacent regions that region growing split off one plane.
-     *
-     * Adjacent pairs less than `max_angle` (radians) apart are tried, the
-     * closest first. Their groups merge where one plane fitted to the points
-     * of both leaves each region at most 1 % more of its points beyond `off`
-     * and its rms at most `rms_slack` above that of its own least-squares
-     * plane: a split, not a ridge or a step. A merged region keeps its first
-     * region's id and takes the merged plane; the other regions are dropped.
-     *
-     * @return number of merges
-     */
-    template <typename RegionVec>
-    size_t merge_coplanar_regions(
-        PlaneDS& cds, RegionVec& regions,
+    // Merge adjacent regions that one plane fits about as well as their own;
+    // max_angle in degrees.
+    inline size_t merge_coplanar_regions(
+        PlaneDS& cds, std::vector<PlaneRegion>& regions,
         const std::map<size_t, std::map<size_t, size_t>>& adjacencies,
         double max_angle, double off, double rms_slack) {
       std::map<size_t, size_t> index;
@@ -190,12 +177,10 @@ namespace roofer {
           auto ia = index.find(a), ib = index.find(b);
           if (ia == index.end() || ib == index.end()) continue;
           size_t i = ia->second, j = ib->second;
-          auto ni = regions[i].plane.orthogonal_vector();
-          auto nj = regions[j].plane.orthogonal_vector();
-          double angle = std::acos(std::min(
-              1.0, std::abs(CGAL::to_double(ni * nj)) /
-                       std::sqrt(CGAL::to_double(ni.squared_length() *
-                                                 nj.squared_length()))));
+          double angle =
+              CGAL::approximate_angle(regions[i].plane.orthogonal_vector(),
+                                      regions[j].plane.orthogonal_vector());
+          angle = std::min(angle, 180.0 - angle);
           if (angle < max_angle) pairs.emplace_back(angle, i, j);
         }
       }
@@ -209,21 +194,24 @@ namespace roofer {
       for (auto [angle, i, j] : pairs) {
         auto [ri, rj] = std::minmax({group_of[i], group_of[j]});
         if (ri == rj) continue;
-        std::vector<size_t> group(members[ri]), points;
-        group.insert(group.end(), members[rj].begin(), members[rj].end());
-        for (auto q : group)
-          points.insert(points.end(), regions[q].inliers.begin(),
-                        regions[q].inliers.end());
+        std::vector<size_t> points;
+        for (auto m : {ri, rj})
+          for (auto q : members[m])
+            points.insert(points.end(), regions[q].inliers.begin(),
+                          regions[q].inliers.end());
         Plane plane;
         cds.fit_plane(points, plane);
-        if (!std::all_of(group.begin(), group.end(), [&](size_t q) {
-              auto fit = plane_fit(cds, regions[q].inliers, plane, off);
-              return fit.off_share <= own[q].off_share + 0.01 &&
-                     fit.rms <= own[q].rms + rms_slack;
-            }))
+        auto fits = [&](size_t q) {
+          auto fit = plane_fit(cds, regions[q].inliers, plane, off);
+          return fit.off_share <= own[q].off_share + 0.01 &&
+                 fit.rms <= own[q].rms + rms_slack;
+        };
+        if (!std::ranges::all_of(members[ri], fits) ||
+            !std::ranges::all_of(members[rj], fits))
           continue;
         for (auto q : members[rj]) group_of[q] = ri;
-        members[ri] = std::move(group);
+        members[ri].insert(members[ri].end(), members[rj].begin(),
+                           members[rj].end());
         regions[ri].plane = plane;
         ++n_merges;
       }
