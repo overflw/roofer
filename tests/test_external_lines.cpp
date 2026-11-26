@@ -116,3 +116,68 @@ TEST_CASE("an external line becomes an arrangement edge", "[external_lines]") {
     CHECK(edge_length(external, priority) == Catch::Approx(10).margin(1e-3));
   }
 }
+
+namespace {
+  LinearRing ring(std::initializer_list<std::pair<float, float>> points) {
+    LinearRing result;
+    for (auto [x, y] : points) result.push_back({x, y, 0});
+    return result;
+  }
+
+  bool has_arc(const SegmentCollection& arcs, arr3f a, arr3f b) {
+    auto near = [](const arr3f& p, const arr3f& q) {
+      return std::abs(p[0] - q[0]) < 1e-3 && std::abs(p[1] - q[1]) < 1e-3;
+    };
+    for (const auto& s : arcs)
+      if ((near(s[0], a) && near(s[1], b)) || (near(s[0], b) && near(s[1], a)))
+        return true;
+    return false;
+  }
+}  // namespace
+
+TEST_CASE("footprint skeleton of a rectangle is a hipped roof",
+          "[external_lines]") {
+  auto arcs = reconstruction::footprint_skeleton(
+      ring({{0, 0}, {10, 0}, {10, 4}, {0, 4}}));
+  CHECK(arcs.size() == 5);
+  CHECK(has_arc(arcs, {2, 2, 0}, {8, 2, 0}));
+  CHECK(has_arc(arcs, {0, 0, 0}, {2, 2, 0}));
+  CHECK(has_arc(arcs, {10, 4, 0}, {8, 2, 0}));
+
+  // clockwise and closed gives the same arcs
+  auto cw = reconstruction::footprint_skeleton(
+      ring({{0, 0}, {0, 4}, {10, 4}, {10, 0}, {0, 0}}));
+  CHECK(cw.size() == 5);
+  CHECK(has_arc(cw, {2, 2, 0}, {8, 2, 0}));
+
+  // the hips are 2.83 m, so only the ridge is at least 3 m
+  auto long_arcs = reconstruction::footprint_skeleton(
+      ring({{0, 0}, {10, 0}, {10, 4}, {0, 4}}), 3.F);
+  CHECK(long_arcs.size() == 1);
+  CHECK(has_arc(long_arcs, {2, 2, 0}, {8, 2, 0}));
+}
+
+TEST_CASE("footprint skeleton of an L-shape joins both ridges",
+          "[external_lines]") {
+  auto arcs = reconstruction::footprint_skeleton(
+      ring({{0, 0}, {10, 0}, {10, 4}, {4, 4}, {4, 10}, {0, 10}}));
+  CHECK(arcs.size() == 8);
+  CHECK(has_arc(arcs, {2, 2, 0}, {8, 2, 0}));
+  CHECK(has_arc(arcs, {2, 2, 0}, {2, 8, 0}));
+  CHECK(has_arc(arcs, {4, 4, 0}, {2, 2, 0}));
+}
+
+TEST_CASE("footprint skeleton respects holes and rejects invalid rings",
+          "[external_lines]") {
+  auto frame = ring({{0, 0}, {10, 0}, {10, 10}, {0, 10}});
+  frame.interior_rings().push_back(ring({{3, 3}, {7, 3}, {7, 7}, {3, 7}}));
+  auto arcs = reconstruction::footprint_skeleton(frame);
+  // a ring of corner arcs and the frame's centre line
+  CHECK(arcs.size() == 12);
+  CHECK(has_arc(arcs, {0, 0, 0}, {1.5, 1.5, 0}));
+  CHECK(has_arc(arcs, {3, 3, 0}, {1.5, 1.5, 0}));
+  CHECK(has_arc(arcs, {1.5, 1.5, 0}, {8.5, 1.5, 0}));
+
+  auto bow_tie = ring({{0, 0}, {10, 10}, {10, 0}, {0, 10}});
+  CHECK(reconstruction::footprint_skeleton(bow_tie).empty());
+}

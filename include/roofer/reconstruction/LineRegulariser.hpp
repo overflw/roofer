@@ -40,7 +40,11 @@ namespace roofer::reconstruction {
   X(int, external_line_priority, 0,                                            \
     "Priority of external lines: 0 as detected boundary lines, 1 above "       \
     "them, 2 as plane intersection lines.",                                    \
-    config::in_range(0, 2), public_)
+    config::in_range(0, 2), public_)                                           \
+  X(bool, roofprint_skeleton, false,                                           \
+    "Add the footprint's straight skeleton arcs of at least 1 m as external "  \
+    "lines.",                                                                  \
+    config::no_validation<bool>(), public_)
   struct LineRegulariserConfig {
     using Self = LineRegulariserConfig;
     ROOFER_CONFIG_MEMBERS(ROOFER_LINE_REGULARISER_FIELDS)
@@ -72,4 +76,9 @@ namespace roofer::reconstruction {
   };
 
   std::unique_ptr<LineRegulariserInterface> createLineRegulariser();
+
+  // Arcs of the interior straight skeleton of `footprint` (with its holes)
+  // that are at least `min_length` long, at z 0. Empty if the skeleton fails.
+  SegmentCollection footprint_skeleton(const LinearRing& footprint,
+                                       float min_length = 1.0F);
 }  // namespace roofer::reconstruction

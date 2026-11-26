@@ -150,6 +150,18 @@ by its highest priority lines:
   these are kept separately, so a line close to a detected ridge adds a narrow
   face that the graph cut assigns to either side.
 
+`roofprint-skeleton` adds the footprint's own candidate lines without a line
+source: the arcs of its interior straight skeleton of at least 1 m, which are
+the ridges and hips of a hipped roof over the footprint. They join the external
+lines with the same priority. This helps where the point cloud is too smooth to
+show ridges, for example a DSM from image matching, and costs about 15 % more
+reconstruction time.
+
+```toml
+[reconstruction.line-regulariser]
+roofprint-skeleton = true
+```
+
 ## Config file
 Below is an example of a [TOML](https://toml.io/en/) configuration file for the {program}`roofer` CLI application. It shows all the available options. Some of these options are also available as command line arguments, in case one option is provided both in the configuration file and as a command line argument, the command line argument takes precedence.
 
