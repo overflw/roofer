@@ -83,7 +83,19 @@ namespace roofer::reconstruction {
   X(bool, regularise_axis_symmetry, false, "Regularise plane symmetry.",       \
     config::no_validation<bool>(), public_)                                    \
   X(int, max_plane_count, 900, "Maximum detected planes before aborting.",     \
-    config::greater_than(0), public_)
+    config::greater_than(0), public_)                                          \
+  X(bool, merge_coplanar, false,                                               \
+    "Merge adjacent region-grown planes that one plane fits about as well.",   \
+    config::no_validation<bool>(), public_)                                    \
+  X(float, merge_max_angle, 20.0F,                                             \
+    "Maximum angle between planes to merge, in degrees.",                      \
+    config::in_range(0.0F, 90.0F), public_)                                    \
+  X(float, merge_off_distance, 0.15F,                                          \
+    "Distance beyond which a point is off a merged plane, in metres.",         \
+    config::greater_than(0.0F), public_)                                       \
+  X(float, merge_rms_slack, 0.02F,                                             \
+    "RMS a merged plane may add to each plane, in metres.",                    \
+    config::at_least(0.0F), public_)
 
   struct PlaneDetectorConfig {
     using Self = PlaneDetectorConfig;
