@@ -1174,6 +1174,14 @@ face that the graph cut assigns to either side.</p></li>
 <span class="n">regularise-axis-symmetry</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
 <span class="c1">## Maximum detected planes before aborting.</span>
 <span class="n">max-plane-count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">900</span>
+<span class="c1">## Merge adjacent region-grown planes that one plane fits about as well.</span>
+<span class="n">merge-coplanar</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+<span class="c1">## Maximum angle between planes to merge, in degrees.</span>
+<span class="n">merge-max-angle</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">20</span>
+<span class="c1">## Distance beyond which a point is off a merged plane, in metres.</span>
+<span class="n">merge-off-distance</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.15</span>
+<span class="c1">## RMS a merged plane may add to each plane, in metres.</span>
+<span class="n">merge-rms-slack</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.02</span>
 
 <span class="k">[reconstruction.alpha-shaper]</span>
 <span class="c1">## Alpha-shape squared-radius parameter, in square metres.</span>
