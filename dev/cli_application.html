@@ -1021,6 +1021,16 @@ line.</p></li>
 these are kept separately, so a line close to a detected ridge adds a narrow
 face that the graph cut assigns to either side.</p></li>
 </ul>
+<p><code class="docutils literal notranslate"><span class="pre">roofprint-skeleton</span></code> adds the footprint’s own candidate lines without a line
+source: the arcs of its interior straight skeleton of at least 1 m, which are
+the ridges and hips of a hipped roof over the footprint. They join the external
+lines with the same priority. This helps where the point cloud is too smooth to
+show ridges, for example a DSM from image matching, and costs about 15 % more
+reconstruction time.</p>
+<div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="k">[reconstruction.line-regulariser]</span>
+<span class="n">roofprint-skeleton</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</pre></div>
+</div>
 </section>
 </section>
 <section id="config-file">
@@ -1228,6 +1238,8 @@ face that the graph cut assigns to either side.</p></li>
 <span class="n">merge-intersection-lines</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
 <span class="c1">## Priority of external lines: 0 as detected boundary lines, 1 above them, 2 as plane intersection lines.</span>
 <span class="n">external-line-priority</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="c1">## Add the footprint&#39;s straight skeleton arcs of at least 1 m as external lines.</span>
+<span class="n">roofprint-skeleton</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
 
 <span class="k">[reconstruction.segment-rasteriser]</span>
 <span class="c1">## Raster cell size, in metres.</span>
