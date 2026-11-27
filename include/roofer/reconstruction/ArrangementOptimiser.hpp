@@ -21,7 +21,9 @@
 
 #pragma once
 #include <functional>
+#include <map>
 #include <memory>
+#include <set>
 #include <roofer/common/Raster.hpp>
 #include <roofer/common/datastructures.hpp>
 #include <roofer/reconstruction/cgal_shared_definitions.hpp>
@@ -81,6 +83,17 @@ namespace roofer::reconstruction {
   };
 
   std::vector<LinearRing> arr2polygons(Arrangement_2& arr);
+
+  /**
+   * After the graph cut: a roof plane in `least_area` whose faces cover less
+   * than the area it gives goes, and its faces take their next cheapest roof
+   * plane.
+   *
+   * @return the planes that went
+   */
+  std::set<int> drop_small_labels(Arrangement_2& arr,
+                                  const IndexedPlanesWithPoints& roof_planes,
+                                  const std::map<int, double>& least_area);
 
   std::unique_ptr<ArrangementOptimiserInterface> createArrangementOptimiser();
 }  // namespace roofer::reconstruction

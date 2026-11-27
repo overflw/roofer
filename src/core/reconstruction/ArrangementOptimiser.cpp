@@ -386,6 +386,48 @@ namespace roofer::reconstruction {
     return linear_rings;
   }
 
+  std::set<int> drop_small_labels(Arrangement_2& arr,
+                                  const IndexedPlanesWithPoints& roof_planes,
+                                  const std::map<int, double>& least_area) {
+    std::vector<int> ids;  // per graph-cut label its roof plane
+    for (const auto& [id, plane] : roof_planes)
+      if (id > 0) ids.push_back(id);
+    auto labelled = [&](Face_handle face) {
+      return face->data().in_footprint && face->data().label < ids.size();
+    };
+    std::map<int, double> area;
+    for (auto face : arr.face_handles()) {
+      if (!labelled(face) || !least_area.count(ids[face->data().label]))
+        continue;
+      vec2f ring;
+      arrangementface_to_polygon(face, ring);
+      double a = 0;
+      for (size_t i = 0; i < ring.size(); ++i) {
+        auto &p = ring[i], &q = ring[(i + 1) % ring.size()];
+        a += (p[0] * q[1] - q[0] * p[1]) / 2;
+      }
+      area[ids[face->data().label]] += a;
+    }
+    std::set<int> dropped;
+    for (auto [id, least] : least_area)
+      if (area[id] < least) dropped.insert(id);
+    for (auto face : arr.face_handles()) {
+      if (!labelled(face) || !dropped.count(ids[face->data().label])) continue;
+      auto& cost = face->data().vertex_label_cost;
+      size_t best = ids.size();
+      for (size_t i = 0; i < ids.size(); ++i)
+        if (!dropped.count(ids[i]) &&
+            (best == ids.size() || cost[i] < cost[best]))
+          best = i;
+      if (best == ids.size()) continue;
+      face->data().label = best;
+      face->data().plane = roof_planes.at(ids[best]).first;
+      face->data().segid = ids[best];
+      face->data().rms_error_to_avg = cost[best];
+    }
+    return dropped;
+  }
+
   std::unique_ptr<ArrangementOptimiserInterface> createArrangementOptimiser() {
     return std::make_unique<ArrangementOptimiser>();
   }
