@@ -26,11 +26,46 @@
 
 namespace roofer::reconstruction {
 
+  // Moves each end of a regularised plane intersection line onto the first
+  // footprint corner beyond its data that lies within snap_distance of the
+  // line, so hips meet the eave at the corner instead of next to it.
+  linereg::Segment_2 snap_ends_to_corners(const linereg::Segment_2& segment,
+                                          const LinearRing& footprint,
+                                          double extension,
+                                          double snap_distance) {
+    linereg::Point_2 ends[2] = {segment.source(), segment.target()};
+    linereg::Vector_2 dir = segment.to_vector();
+    dir = dir / CGAL::sqrt(CGAL::to_double(dir.squared_length()));
+    for (int end = 0; end < 2; ++end) {
+      auto outward = end == 0 ? -dir : dir;
+      auto data_end = ends[end] - outward * extension;
+      double best = extension;
+      auto snap_to = ends[end];
+      auto consider = [&](const vec3f& ring) {
+        for (auto& p : ring) {
+          linereg::Vector_2 v = linereg::Point_2(p[0], p[1]) - data_end;
+          double along = CGAL::to_double(v * outward);
+          double across = std::abs(CGAL::to_double(
+              v.x() * outward.y() - v.y() * outward.x()));
+          if (along >= 0 && along <= best && across <= snap_distance) {
+            best = along;
+            snap_to = linereg::Point_2(p[0], p[1]);
+          }
+        }
+      };
+      consider(footprint);
+      for (auto& hole : footprint.interior_rings()) consider(hole);
+      ends[end] = snap_to;
+    }
+    return linereg::Segment_2(ends[0], ends[1]);
+  }
+
   class LineRegulariser : public LineRegulariserInterface {
     void compute(const SegmentCollection& edge_segments,
                  const SegmentCollection& ints_segments,
                  LineRegulariserConfig cfg,
-                 const SegmentCollection& external_segments) override {
+                 const SegmentCollection& external_segments,
+                 const LinearRing& footprint) override {
       // get clusters from line regularisation
       auto LR = linereg::LineRegulariser();
       LR.add_segments(0, edge_segments);
@@ -100,6 +135,9 @@ namespace roofer::reconstruction {
             segment = linereg::calc_segment(centroid, mean_angle,
                                             bounding_lines, cfg.extension);
             bounding_lines.pop_back();
+            if (cfg.corner_snap_distance > 0)
+              segment = snap_ends_to_corners(segment, footprint, cfg.extension,
+                                             cfg.corner_snap_distance);
             auto new_seg = Segment();
             new_seg[0] = {float(CGAL::to_double(segment.source().x())),
                           float(CGAL::to_double(segment.source().y())), 0};
@@ -114,6 +152,9 @@ namespace roofer::reconstruction {
           auto centroid = calc_centroid(prio_lines);
           segment = linereg::calc_segment(centroid, mean_angle, dclust->lines,
                                           cfg.extension);
+          if (max_priority == 2 && cfg.corner_snap_distance > 0)
+            segment = snap_ends_to_corners(segment, footprint, cfg.extension,
+                                           cfg.corner_snap_distance);
           auto new_seg = Segment();
           new_seg[0] = {float(CGAL::to_double(segment.source().x())),
                         float(CGAL::to_double(segment.source().y())), 0};

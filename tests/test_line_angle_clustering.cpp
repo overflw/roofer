@@ -49,3 +49,22 @@ TEST_CASE("retained plane intersection lines cover their own endpoints",
   CHECK(lengths.first == Catch::Approx(14 * 14).margin(0.01));
   CHECK(lengths.second == Catch::Approx(16 * 16).margin(0.01));
 }
+
+TEST_CASE("plane intersection lines snap to nearby footprint corners",
+          "[linereg]") {
+  roofer::SegmentCollection edges, intersections;
+  intersections.push_back(
+      {roofer::arr3f{1, 1.2F, 0}, roofer::arr3f{8, 8.2F, 0}});
+  roofer::LinearRing footprint;
+  for (auto p : {roofer::arr3f{0, 0, 0}, roofer::arr3f{10, 0, 0},
+                 roofer::arr3f{10, 10, 0}, roofer::arr3f{0, 10, 0}})
+    footprint.push_back(p);
+
+  auto regulariser = roofer::reconstruction::createLineRegulariser();
+  regulariser->compute(edges, intersections, {}, {}, footprint);
+
+  const auto& result = regulariser->exact_regularised_edges;
+  REQUIRE(result.size() == 1);
+  CHECK(result[0].source() == roofer::linereg::Point_2(0, 0));
+  CHECK(result[0].target() == roofer::linereg::Point_2(10, 10));
+}

@@ -40,7 +40,11 @@ namespace roofer::reconstruction {
   X(int, external_line_priority, 0,                                            \
     "Priority of external lines: 0 as detected boundary lines, 1 above "       \
     "them, 2 as plane intersection lines.",                                    \
-    config::in_range(0, 2), public_)
+    config::in_range(0, 2), public_)                                       \
+  X(float, corner_snap_distance, 1.0F,                                         \
+    "Snap the ends of plane intersection lines to footprint corners within "   \
+    "this distance of the line, in metres. 0 disables.",                       \
+    config::at_least(0.0F), public_)
   struct LineRegulariserConfig {
     using Self = LineRegulariserConfig;
     ROOFER_CONFIG_MEMBERS(ROOFER_LINE_REGULARISER_FIELDS)
@@ -68,7 +72,8 @@ namespace roofer::reconstruction {
     virtual void compute(const SegmentCollection& edge_segments,
                          const SegmentCollection& ints_segments,
                          LineRegulariserConfig config = LineRegulariserConfig(),
-                         const SegmentCollection& external_segments = {}) = 0;
+                         const SegmentCollection& external_segments = {},
+                         const LinearRing& footprint = {}) = 0;
   };
 
   std::unique_ptr<LineRegulariserInterface> createLineRegulariser();

@@ -480,7 +480,8 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
     auto LineRegulariser = roofer::reconstruction::createLineRegulariser();
     LineRegulariser->compute(
         LineDetector->edge_segments, PlaneIntersector->segments,
-        reconstruction.line_regulariser, building.external_lines);
+        reconstruction.line_regulariser, building.external_lines,
+        building.footprint);
     timings["LineRegulariser"] = std::chrono::high_resolution_clock::now() - t0;
     // logger.debug("Completed LineRegulariser");
 #ifdef RF_USE_RERUN
