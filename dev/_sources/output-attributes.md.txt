@@ -37,6 +37,9 @@ Indicates if a glass roof was detected
 ```{option} is_mutated (default name: rf_is_mutated)
 Indicates if the building was mutated between multiple input pointclouds (if multiple input pointclouds were provided)
 ```
+```{option} narrow (default name: rf_narrow)
+The roofpart is a narrow structure on the roof: a wall's top, a parapet (narrow-planes)
+```
 ```{option} nodata_frac (default name: rf_nodata_frac)
 Indicates fraction (in the range [0,1]) of the roofprint area that is not covered by pointcloud data
 ```

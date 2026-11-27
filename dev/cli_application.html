@@ -715,7 +715,7 @@ roofer<span class="w"> </span>--tiling<span class="w"> </span>pointcloud.laz<spa
 
 <dl class="std option">
 <dt class="sig sig-object std" id="cmdoption-attribute-rename">
-<span class="sig-name descname"><span class="pre">--attribute-rename</span></span><span class="sig-prename descclassname"> <span class="pre">key=value[,...]</span> <span class="pre">(default:</span> <span class="pre">azimuth=rf_azimuth,extrusion_mode=rf_extrusion_mode,force_lod11=rf_force_lod11,h_ground=rf_h_ground,h_pc_98p=rf_h_pc_98p,h_roof_50p=rf_h_roof_50p,h_roof_70p=rf_h_roof_70p,h_roof_max=rf_h_roof_max,h_roof_min=rf_h_roof_min,h_roof_ridge=rf_h_roof_ridge,has_underpass=rf_has_underpass,is_glass_roof=rf_is_glass_roof,is_mutated=rf_is_mutated,nodata_frac=rf_nodata_frac,nodata_r=rf_nodata_r,pc_select=rf_pc_select,pc_source=rf_pc_source,pc_year=rf_pc_year,pointcloud_unusable=rf_pointcloud_unusable,pt_density=rf_pt_density,reconstruction_time=rf_t_run,rmse_lod12=rf_rmse_lod12,rmse_lod13=rf_rmse_lod13,rmse_lod22=rf_rmse_lod22,roof_n_planes=rf_roof_planes,roof_n_ridgelines=rf_ridgelines,roof_type=rf_roof_type,slope=rf_slope,success=rf_success,val3dity_lod12=rf_val3dity_lod12,val3dity_lod13=rf_val3dity_lod13,val3dity_lod22=rf_val3dity_lod22,volume_lod12=rf_volume_lod12,volume_lod13=rf_volume_lod13,volume_lod22=rf_volume_lod22)</span></span><a class="headerlink" href="#cmdoption-attribute-rename" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">--attribute-rename</span></span><span class="sig-prename descclassname"> <span class="pre">key=value[,...]</span> <span class="pre">(default:</span> <span class="pre">azimuth=rf_azimuth,extrusion_mode=rf_extrusion_mode,force_lod11=rf_force_lod11,h_ground=rf_h_ground,h_pc_98p=rf_h_pc_98p,h_roof_50p=rf_h_roof_50p,h_roof_70p=rf_h_roof_70p,h_roof_max=rf_h_roof_max,h_roof_min=rf_h_roof_min,h_roof_ridge=rf_h_roof_ridge,has_underpass=rf_has_underpass,is_glass_roof=rf_is_glass_roof,is_mutated=rf_is_mutated,narrow=rf_narrow,nodata_frac=rf_nodata_frac,nodata_r=rf_nodata_r,pc_select=rf_pc_select,pc_source=rf_pc_source,pc_year=rf_pc_year,pointcloud_unusable=rf_pointcloud_unusable,pt_density=rf_pt_density,reconstruction_time=rf_t_run,rmse_lod12=rf_rmse_lod12,rmse_lod13=rf_rmse_lod13,rmse_lod22=rf_rmse_lod22,roof_n_planes=rf_roof_planes,roof_n_ridgelines=rf_ridgelines,roof_type=rf_roof_type,slope=rf_slope,success=rf_success,val3dity_lod12=rf_val3dity_lod12,val3dity_lod13=rf_val3dity_lod13,val3dity_lod22=rf_val3dity_lod22,volume_lod12=rf_volume_lod12,volume_lod13=rf_volume_lod13,volume_lod22=rf_volume_lod22)</span></span><a class="headerlink" href="#cmdoption-attribute-rename" title="Link to this definition">¶</a></dt>
 <dd><p>Rename output attributes. If no value is provided, the attribute will not be written. See the list of available attributes with <code class="docutils literal notranslate"><span class="pre">--attributes</span></code>. By default attribute names are prefixed with <code class="docutils literal notranslate"><span class="pre">rf_</span></code>.</p>
 </dd></dl>
 
@@ -826,6 +826,12 @@ header.</p>
 <dt class="sig sig-object std" id="cmdoption-arg-is_mutated">
 <span class="sig-name descname"><span class="pre">is_mutated</span></span><span class="sig-prename descclassname"> <span class="pre">(default</span> <span class="pre">name:</span> <span class="pre">rf_is_mutated)</span></span><a class="headerlink" href="#cmdoption-arg-is_mutated" title="Link to this definition">¶</a></dt>
 <dd><p>Indicates if the building was mutated between multiple input pointclouds (if multiple input pointclouds were provided)</p>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-arg-narrow">
+<span class="sig-name descname"><span class="pre">narrow</span></span><span class="sig-prename descclassname"> <span class="pre">(default</span> <span class="pre">name:</span> <span class="pre">rf_narrow)</span></span><a class="headerlink" href="#cmdoption-arg-narrow" title="Link to this definition">¶</a></dt>
+<dd><p>The roofpart is a narrow structure on the roof: a wall’s top, a parapet (narrow-planes)</p>
 </dd></dl>
 
 <dl class="std option">
@@ -1032,6 +1038,43 @@ reconstruction time.</p>
 </pre></div>
 </div>
 </section>
+<section id="narrow-structures">
+<h3>Narrow structures<a class="headerlink" href="#narrow-structures" title="Link to this heading">¶</a></h3>
+<p>A firewall or parapet on a flat roof is often narrower than twice the alpha
+shape’s radius (r = sqrt(<code class="docutils literal notranslate"><span class="pre">alpha-shaper.alpha</span></code>)). The region grower leaves its
+points unsegmented or fits them as a narrow plane whose alpha shape breaks up,
+so the roof face runs on underneath. <code class="docutils literal notranslate"><span class="pre">narrow-planes</span></code> adds a step after the
+plane detector:</p>
+<div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="k">[reconstruction.plane-detector]</span>
+<span class="n">narrow-planes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">narrow-max-slope</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">10.0</span><span class="w">   </span><span class="c1"># degrees, steepest roof a structure stands on</span>
+<span class="n">narrow-min-height</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5</span><span class="w">   </span><span class="c1"># m over the roof on both sides</span>
+<span class="n">narrow-min-length</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">4.0</span><span class="w">   </span><span class="c1"># m, for structures away from the footprint</span>
+</pre></div>
+</div>
+<ol class="arabic simple">
+<li><p>Points that stand more than <code class="docutils literal notranslate"><span class="pre">plane-epsilon</span></code> over a less steep plane within
+2r, unsegmented or in a plane that mostly stands, are split into straight
+runs at most sqrt(3)·r wide. A run that stands <code class="docutils literal notranslate"><span class="pre">narrow-min-height</span></code> over the
+roof on both sides becomes a plane, level across, outlined by its
+rectangle. Pieces in line at one height are merged; ends run on over
+unsegmented points, to the footprint within 4r, and across a structure they
+meet at a T or a corner.</p></li>
+<li><p>Left out are structures along the footprint, shorter than 4r, and those
+shorter than <code class="docutils literal notranslate"><span class="pre">narrow-min-length</span></code> that end away from the footprint between
+roof of one height (chimneys, rooftop equipment). Their points go back to
+their plane; a building without a structure left is reconstructed as
+without the option.</p></li>
+<li><p>Each rectangle goes into the heightfield; its plane’s alpha shape gives no
+lines. Its sides, carried on by the regulariser’s <code class="docutils literal notranslate"><span class="pre">extension</span></code> but no
+farther than it is long, go into the arrangement past the regulariser,
+which would merge them.</p></li>
+<li><p>The graph cut allows a narrow plane’s label only on faces that lie in its
+rectangle: elsewhere it costs more than any data and smoothness cost it
+could save. The faces beside it take the roof planes as usual.</p></li>
+</ol>
+<p>Roof surfaces in a rectangle and on its plane carry the attribute <code class="docutils literal notranslate"><span class="pre">rf_narrow</span></code>.</p>
+</section>
 </section>
 <section id="config-file">
 <h2>Config file<a class="headerlink" href="#config-file" title="Link to this heading">¶</a></h2>
@@ -1184,6 +1227,14 @@ reconstruction time.</p>
 <span class="n">regularise-axis-symmetry</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
 <span class="c1">## Maximum detected planes before aborting.</span>
 <span class="n">max-plane-count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">900</span>
+<span class="c1">## Detect narrow structures (walls, parapets) standing in what the plane detector left and outline them as rectangles (roofer app only).</span>
+<span class="n">narrow-planes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+<span class="c1">## Steepest roof plane, in degrees, a narrow structure stands on.</span>
+<span class="n">narrow-max-slope</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">10</span>
+<span class="c1">## Least height, in metres, a narrow structure stands over the roof beside it.</span>
+<span class="n">narrow-min-height</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5</span>
+<span class="c1">## Least length, in metres, of a narrow structure away from the footprint and with roof of one height on both sides.</span>
+<span class="n">narrow-min-length</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4</span>
 <span class="c1">## Merge adjacent region-grown planes that one plane fits about as well.</span>
 <span class="n">merge-coplanar</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
 <span class="c1">## Maximum angle between planes to merge, in degrees.</span>
@@ -1334,6 +1385,8 @@ reconstruction time.</p>
 <span class="n">is_glass_roof</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;rf_is_glass_roof&quot;</span>
 <span class="c1">## Indicates if the building was mutated between multiple input pointclouds (if multiple input pointclouds were provided)</span>
 <span class="n">is_mutated</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;rf_is_mutated&quot;</span>
+<span class="c1">## The roofpart is a narrow structure on the roof: a wall&#39;s top, a parapet (narrow-planes)</span>
+<span class="n">narrow</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;rf_narrow&quot;</span>
 <span class="c1">## Indicates fraction (in the range [0,1]) of the roofprint area that is not covered by pointcloud data</span>
 <span class="n">nodata_frac</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;rf_nodata_frac&quot;</span>
 <span class="c1">## Indicates the radius of the largest circle in the roofprint that is not covered by pointcloud data, in input map units</span>
@@ -1461,6 +1514,7 @@ reconstruction time.</p>
 <li><a class="reference internal" href="#output-attributes">Output attributes</a></li>
 <li><a class="reference internal" href="#underpass-attributes">Underpass attributes</a></li>
 <li><a class="reference internal" href="#roof-lines">Roof lines</a></li>
+<li><a class="reference internal" href="#narrow-structures">Narrow structures</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#config-file">Config file</a></li>
