@@ -84,6 +84,21 @@ namespace roofer::reconstruction {
     config::no_validation<bool>(), public_)                                    \
   X(int, max_plane_count, 900, "Maximum detected planes before aborting.",     \
     config::greater_than(0), public_)                                          \
+  X(bool, narrow_planes, false,                                                \
+    "Detect narrow structures (walls, parapets) standing in what the plane "   \
+    "detector left and outline them as rectangles (roofer app only).",         \
+    config::no_validation<bool>(), public_)                                    \
+  X(float, narrow_max_slope, 10.0F,                                            \
+    "Steepest roof plane, in degrees, a narrow structure stands on.",          \
+    config::greater_than(0.0F), public_)                                       \
+  X(float, narrow_min_height, 0.5F,                                            \
+    "Least height, in metres, a narrow structure stands over the roof beside " \
+    "it.",                                                                     \
+    config::greater_than(0.0F), public_)                                       \
+  X(float, narrow_min_length, 4.0F,                                            \
+    "Least length, in metres, of a narrow structure away from the footprint "  \
+    "and with roof of one height on both sides.",                              \
+    config::greater_than(0.0F), public_)                                       \
   X(bool, merge_coplanar, false,                                               \
     "Merge adjacent region-grown planes that one plane fits about as well.",   \
     config::no_validation<bool>(), public_)                                    \

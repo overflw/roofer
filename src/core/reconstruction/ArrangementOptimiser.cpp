@@ -215,10 +215,12 @@ namespace roofer::reconstruction {
   };
 
   class ArrangementOptimiser : public ArrangementOptimiserInterface {
-    void compute(Arrangement_2& arr, const RasterTools::Raster& heightfield,
-                 const IndexedPlanesWithPoints& roof_planes,
-                 const IndexedPlanesWithPoints& ground_planes,
-                 ArrangementOptimiserConfig cfg) override {
+    void compute(
+        Arrangement_2& arr, const RasterTools::Raster& heightfield,
+        const IndexedPlanesWithPoints& roof_planes,
+        const IndexedPlanesWithPoints& ground_planes,
+        ArrangementOptimiserConfig cfg,
+        std::function<bool(Arrangement_2::Face_handle, int)> allowed) override {
       std::vector<std::tuple<Plane, size_t>>
           points_per_plane;  // plane, points, seg_id
       for (const auto& [plane_id, plane_pts] : roof_planes) {
@@ -304,6 +306,16 @@ namespace roofer::reconstruction {
           double n_w = edge->data().edge_weight / max_weight;
           edge->data().edge_weight = n_w;
         }
+      }
+
+      // a forbidden label costs more than any data and smoothness it saves
+      if (allowed) {
+        double forbidden = (cfg.normalise ? 1 : max_cost) + 1;
+        for (auto edge : edges) forbidden += edge->data().edge_weight;
+        for (auto face : faces)
+          for (size_t i = 0; i < roofplane_cnt; ++i)
+            if (!allowed(face, std::get<1>(points_per_plane[i])))
+              face->data().vertex_label_cost[i] = forbidden;
       }
 
       FootprintGraph graph(faces, edges);

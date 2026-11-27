@@ -162,6 +162,56 @@ reconstruction time.
 roofprint-skeleton = true
 ```
 
+### Narrow structures
+
+A firewall or parapet on a flat roof is often narrower than twice the alpha
+shape's radius (r = sqrt(`alpha-shaper.alpha`)). The region grower leaves its
+points unsegmented or fits them as a narrow plane whose alpha shape breaks up,
+so the roof face runs on underneath. `narrow-planes` adds a step after the
+plane detector:
+
+```toml
+[reconstruction.plane-detector]
+narrow-planes = true
+narrow-max-slope = 10.0   # degrees, steepest roof a structure stands on
+narrow-min-height = 0.5   # m over the roof on both sides
+narrow-min-length = 4.0   # m, for structures away from the footprint
+```
+
+```{mermaid}
+flowchart LR
+  PD[plane detector] --> NP[narrow structures]
+  NP -- "planes, labels" --> AS[alpha shaper]
+  NP -- "rectangles" --> HF[heightfield]
+  AS --> HF
+  AS --> LR[line regulariser]
+  NP -- "rectangle sides" --> ARR[arrangement]
+  LR --> ARR --> OPT[graph cut]
+  NP -- "rectangles" --> OPT
+```
+
+1. Points that stand more than `plane-epsilon` over a less steep plane within
+   2r, unsegmented or in a plane that mostly stands, are split into straight
+   runs at most sqrt(3)·r wide. A run that stands `narrow-min-height` over the
+   roof on both sides becomes a plane, level across, outlined by its
+   rectangle. Pieces in line at one height are merged; ends run on over
+   unsegmented points, to the footprint within 4r, and across a structure they
+   meet at a T or a corner.
+2. Left out are structures along the footprint, shorter than 4r, and those
+   shorter than `narrow-min-length` that end away from the footprint between
+   roof of one height (chimneys, rooftop equipment). Their points go back to
+   their plane; a building without a structure left is reconstructed as
+   without the option.
+3. Each rectangle goes into the heightfield; its plane's alpha shape gives no
+   lines. Its sides, carried on by the regulariser's `extension` but no
+   farther than it is long, go into the arrangement past the regulariser,
+   which would merge them.
+4. The graph cut allows a narrow plane's label only on faces that lie in its
+   rectangle: elsewhere it costs more than any data and smoothness cost it
+   could save. The faces beside it take the roof planes as usual.
+
+Roof surfaces in a rectangle and on its plane carry the attribute `rf_narrow`.
+
 ## Config file
 Below is an example of a [TOML](https://toml.io/en/) configuration file for the {program}`roofer` CLI application. It shows all the available options. Some of these options are also available as command line arguments, in case one option is provided both in the configuration file and as a command line argument, the command line argument takes precedence.
 

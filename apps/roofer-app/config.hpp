@@ -249,6 +249,7 @@ struct RooferConfig {
   std::string a_h_ground = "rf_h_ground";
   std::string a_slope = "rf_slope";
   std::string a_azimuth = "rf_azimuth";
+  std::string a_narrow = "rf_narrow";
   std::string a_extrusion_mode = "rf_extrusion_mode";
   std::string a_pointcloud_unusable = "rf_pointcloud_unusable";
 };
@@ -879,6 +880,11 @@ struct RooferConfigHandler {
     output_attr_.emplace(
         "azimuth",
         DocAttrib(&cfg_.a_azimuth, "The azimuth of a roofpart in degrees"));
+    output_attr_.emplace(
+        "narrow",
+        DocAttrib(&cfg_.a_narrow,
+                  "The roofpart is a narrow structure on the roof: a wall's "
+                  "top, a parapet (narrow-planes)"));
     output_attr_.emplace(
         "extrusion_mode",
         DocAttrib(

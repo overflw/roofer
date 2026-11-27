@@ -38,6 +38,7 @@ set(LIBRARY_HEADERS
     "${ROOFER_INCLUDE_DIR}/roofer/reconstruction/LineRegulariser.hpp"
     "${ROOFER_INCLUDE_DIR}/roofer/reconstruction/LineRegulariserBase.hpp"
     "${ROOFER_INCLUDE_DIR}/roofer/reconstruction/MeshTriangulator.hpp"
+    "${ROOFER_INCLUDE_DIR}/roofer/reconstruction/NarrowPlanes.hpp"
     "${ROOFER_INCLUDE_DIR}/roofer/reconstruction/PlaneDetector.hpp"
     "${ROOFER_INCLUDE_DIR}/roofer/reconstruction/PlaneDetectorBase.hpp"
     "${ROOFER_INCLUDE_DIR}/roofer/reconstruction/PlaneIntersector.hpp"

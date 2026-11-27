@@ -73,6 +73,7 @@ namespace fs = std::filesystem;
 #include <roofer/reconstruction/PlaneDetector.hpp>
 #include <roofer/reconstruction/PlaneIntersector.hpp>
 #include <roofer/reconstruction/SegmentRasteriser.hpp>
+#include <roofer/reconstruction/NarrowPlanes.hpp>
 #include <roofer/reconstruction/SimplePolygonExtruder.hpp>
 
 // serialisation

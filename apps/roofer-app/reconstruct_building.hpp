@@ -408,11 +408,44 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
     //         "world/segmented_points",
     //         rerun::Points3D(points_roof).with_class_ids(PlaneDetector->plane_id));
     // #endif
+    std::map<int, roofer::reconstruction::Rectangle> narrow;
+    const double alpha_radius = std::sqrt(reconstruction.alpha_shaper.alpha),
+                 outline_margin = alpha_radius / 4;
+    if (reconstruction.plane_detector.narrow_planes) {
+      t0 = std::chrono::high_resolution_clock::now();
+      narrow = roofer::reconstruction::narrow_structures(
+          building.pointcloud_building, PlaneDetector->plane_id,
+          PlaneDetector->pts_per_roofplane, PlaneDetector->plane_adjacencies,
+          building.footprint, reconstruction.plane_detector, alpha_radius);
+      timings["NarrowPlanes"] = std::chrono::high_resolution_clock::now() - t0;
+    }
+
     t0 = std::chrono::high_resolution_clock::now();
     auto AlphaShaper = roofer::reconstruction::createAlphaShaper();
     AlphaShaper->compute(PlaneDetector->pts_per_roofplane,
                          reconstruction.alpha_shaper);
     timings["AlphaShaper"] = std::chrono::high_resolution_clock::now() - t0;
+    if (!narrow.empty()) {
+      std::vector<roofer::LinearRing> alpha_rings;
+      roofer::vec1i ids;
+      for (size_t i = 0; i < AlphaShaper->alpha_rings.size(); ++i) {
+        if (narrow.count(AlphaShaper->roofplane_ids[i])) continue;
+        alpha_rings.push_back(std::move(AlphaShaper->alpha_rings[i]));
+        ids.push_back(AlphaShaper->roofplane_ids[i]);
+      }
+      AlphaShaper->alpha_rings = std::move(alpha_rings);
+      AlphaShaper->roofplane_ids = std::move(ids);
+      for (const auto& [id, r] : narrow) {
+        const auto& pl = PlaneDetector->pts_per_roofplane.at(id).first;
+        auto z = [&](const roofer::reconstruction::Point2& p) {
+          return roofer::arr3f{
+              float(p[0]), float(p[1]),
+              float(roofer::reconstruction::plane_z(pl, p[0], p[1]))};
+        };
+        AlphaShaper->alpha_triangles.push_back({z(r[0]), z(r[1]), z(r[2])});
+        AlphaShaper->alpha_triangles.push_back({z(r[0]), z(r[2]), z(r[3])});
+      }
+    }
     // logger.debug("Completed AlphaShaper (roof), found {} rings, {} labels",
     //  AlphaShaper->alpha_rings.size(),
     //  AlphaShaper->roofplane_ids.size());
@@ -491,6 +524,15 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
                              PlaneIntersector->segments,
                              reconstruction.line_regulariser, external_lines);
     timings["LineRegulariser"] = std::chrono::high_resolution_clock::now() - t0;
+    // past the regulariser, which would merge a narrow outline's sides
+    for (const auto& [id, r] : narrow) {
+      for (auto& [p, q] : roofer::reconstruction::narrow_edges(
+               r, reconstruction.line_regulariser.extension)) {
+        LineRegulariser->exact_regularised_edges.emplace_back(
+            roofer::EPECK::Point_2(p[0], p[1]),
+            roofer::EPECK::Point_2(q[0], q[1]));
+      }
+    }
     // logger.debug("Completed LineRegulariser");
 #ifdef RF_USE_RERUN
     if (cfg->use_rerun) {
@@ -549,10 +591,25 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
     auto optimiser_config = reconstruction.arrangement_optimiser;
     optimiser_config.use_ground =
         !building.pointcloud_ground.empty() && reconstruction.clip_terrain;
-    ArrangementOptimiser->compute(arrangement, SegmentRasteriser->heightfield,
-                                  PlaneDetector->pts_per_roofplane,
-                                  PlaneDetector_ground->pts_per_roofplane,
-                                  optimiser_config);
+    // a narrow plane labels only cells within its outline
+    auto on_outline = [&](roofer::Arrangement_2::Face_handle f, int id) {
+      auto n = narrow.find(id);
+      if (n == narrow.end()) return true;
+      if (f->number_of_holes() > 0) return false;
+      auto he = f->outer_ccb(), first = he;
+      do {
+        if (!roofer::reconstruction::in_rectangle(
+                n->second, CGAL::to_double(he->source()->point().x()),
+                CGAL::to_double(he->source()->point().y()), outline_margin))
+          return false;
+      } while (++he != first);
+      return true;
+    };
+    ArrangementOptimiser->compute(
+        arrangement, SegmentRasteriser->heightfield,
+        PlaneDetector->pts_per_roofplane,
+        PlaneDetector_ground->pts_per_roofplane, optimiser_config,
+        narrow.empty() ? nullptr : std::function(on_outline));
     timings["ArrangementOptimiser"] =
         std::chrono::high_resolution_clock::now() - t0;
     // logger.debug("Completed ArrangementOptimiser");
@@ -582,6 +639,34 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
       compute_mesh_properties(
           building.multisolids_lod12, building.multisolids_lod13,
           building.multisolids_lod22, building.z_offset, cfg);
+      // a roof polygon in a narrow outline and on its plane is that structure
+      if (!cfg->a_narrow.empty() && !narrow.empty()) {
+        for (auto& [i, mesh] : building.multisolids_lod22) {
+          auto& polygons = mesh.get_polygons();
+          auto& labels = mesh.get_labels();
+          auto& attributes = mesh.get_attributes();
+          for (size_t j = 0; j < polygons.size(); ++j) {
+            if (labels[j] != 1 || polygons[j].empty()) continue;
+            std::array<double, 3> c{0, 0, 0};
+            for (auto& p : polygons[j])
+              for (int k = 0; k < 3; ++k) c[k] += p[k] / polygons[j].size();
+            for (const auto& [id, r] : narrow) {
+              const auto& pl = PlaneDetector->pts_per_roofplane.at(id).first;
+              if (std::all_of(polygons[j].begin(), polygons[j].end(),
+                              [&](auto& p) {
+                                return roofer::reconstruction::in_rectangle(
+                                    r, p[0], p[1], outline_margin);
+                              }) &&
+                  std::abs(c[2] -
+                           roofer::reconstruction::plane_z(pl, c[0], c[1])) <
+                      reconstruction.plane_detector.plane_epsilon / 2) {
+                attributes[j].insert(cfg->a_narrow, true);
+                break;
+              }
+            }
+          }
+        }
+      }
     }
     timings["extrude"] = std::chrono::high_resolution_clock::now() - t0;
 
