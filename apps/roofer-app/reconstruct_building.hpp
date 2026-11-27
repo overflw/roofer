@@ -506,14 +506,23 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
     if (cfg->use_rerun) {
       rec.log("world/intersection_lines",
               rerun::LineStrips3D(PlaneIntersector->segments));
+      rec.log("world/external_lines",
+              rerun::LineStrips3D(building.external_lines));
     }
 #endif
 
     t0 = std::chrono::high_resolution_clock::now();
+    auto external_lines = building.external_lines;
+    if (reconstruction.line_regulariser.roofprint_skeleton) {
+      auto skeleton =
+          roofer::reconstruction::footprint_skeleton(building.footprint);
+      external_lines.insert(external_lines.end(), skeleton.begin(),
+                            skeleton.end());
+    }
     auto LineRegulariser = roofer::reconstruction::createLineRegulariser();
-    LineRegulariser->compute(
-        LineDetector->edge_segments, PlaneIntersector->segments,
-        reconstruction.line_regulariser, building.external_lines);
+    LineRegulariser->compute(LineDetector->edge_segments,
+                             PlaneIntersector->segments,
+                             reconstruction.line_regulariser, external_lines);
     timings["LineRegulariser"] = std::chrono::high_resolution_clock::now() - t0;
     // past the regulariser, which would merge a narrow outline's sides
     for (const auto& [id, r] : narrow) {

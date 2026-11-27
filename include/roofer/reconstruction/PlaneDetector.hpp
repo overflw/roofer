@@ -98,7 +98,19 @@ namespace roofer::reconstruction {
   X(float, narrow_min_length, 4.0F,                                            \
     "Least length, in metres, of a narrow structure away from the footprint "  \
     "and with roof of one height on both sides.",                              \
-    config::greater_than(0.0F), public_)
+    config::greater_than(0.0F), public_)                                       \
+  X(bool, merge_coplanar, false,                                               \
+    "Merge adjacent region-grown planes that one plane fits about as well.",   \
+    config::no_validation<bool>(), public_)                                    \
+  X(float, merge_max_angle, 20.0F,                                             \
+    "Maximum angle between planes to merge, in degrees.",                      \
+    config::in_range(0.0F, 90.0F), public_)                                    \
+  X(float, merge_off_distance, 0.15F,                                          \
+    "Distance beyond which a point is off a merged plane, in metres.",         \
+    config::greater_than(0.0F), public_)                                       \
+  X(float, merge_rms_slack, 0.02F,                                             \
+    "RMS a merged plane may add to each plane, in metres.",                    \
+    config::at_least(0.0F), public_)
 
   struct PlaneDetectorConfig {
     using Self = PlaneDetectorConfig;

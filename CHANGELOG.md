@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional underpass carving in LoD 2.2 models, with OGR input matched by building ID. Underpasses accept explicit ceiling elevations from input or a default clearance above the floor when the height attribute is omitted or its value is null; polygon holes preserve solid pillars. Ceilings are lowered to maintain roof clearance, and invalid or geometrically problematic cutouts are skipped with diagnostics. Carved ceilings are exported as CityJSON `OuterCeilingSurface`.
 - Use `-` as the output path to stream CityJSONSeq to stdout. Each building is written as a CityJSONFeature as soon as its reconstruction finishes.
 - Optional external roof lines (`input.line-source`), for example from orthophotos, as extra candidates for the line regulariser. Each building gets the parts inside its footprint; `reconstruction.line-regulariser.external-line-priority` sets whether they count like detected boundary lines (0, default), above them (1) or like plane intersection lines (2).
+- Optional merging of adjacent detected planes that region growing split off one plane (`reconstruction.plane-detector.merge-coplanar`, with `merge-max-angle`, `merge-off-distance` and `merge-rms-slack`). A pair merges only where one plane fitted to both leaves each of them about as close to its points as its own plane; the neighbouring planes then intersect the merged plane.
+- Optional footprint straight skeleton (`reconstruction.line-regulariser.roofprint-skeleton`) as external lines: the arcs of at least 1 m, the ridge and hip layout of a hipped roof over the footprint, join the external lines of each building.
 
 ### Fixed
 

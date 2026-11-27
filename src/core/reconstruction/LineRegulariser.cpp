@@ -22,6 +22,9 @@
 #include <roofer/reconstruction/LineRegulariser.hpp>
 #include <roofer/reconstruction/LineRegulariserBase.hpp>
 
+#include <CGAL/Polygon_with_holes_2.h>
+#include <CGAL/create_straight_skeleton_from_polygon_with_holes_2.h>
+
 #include <numbers>
 
 namespace roofer::reconstruction {
@@ -137,5 +140,46 @@ namespace roofer::reconstruction {
   std::unique_ptr<LineRegulariserInterface> createLineRegulariser() {
     return std::make_unique<LineRegulariser>();
   };
+
+  SegmentCollection footprint_skeleton(const LinearRing& footprint,
+                                       float min_length) {
+    using Polygon_2 = CGAL::Polygon_2<EPICK>;
+    auto to_polygon = [](const vec3f& ring, bool ccw) {
+      Polygon_2 polygon;
+      for (const auto& p : ring) {
+        EPICK::Point_2 q(p[0], p[1]);
+        if (polygon.is_empty() || polygon.container().back() != q)
+          polygon.push_back(q);
+      }
+      if (polygon.size() > 1 &&
+          polygon.container().front() == polygon.container().back())
+        polygon.container().pop_back();
+      if (polygon.is_simple() && polygon.is_counterclockwise_oriented() != ccw)
+        polygon.reverse_orientation();
+      return polygon;
+    };
+    SegmentCollection segments;
+    auto outer = to_polygon(footprint, true);
+    if (outer.size() < 3 || !outer.is_simple()) return segments;
+    CGAL::Polygon_with_holes_2<EPICK> polygon(outer);
+    for (const auto& ring : footprint.interior_rings()) {
+      auto hole = to_polygon(ring, false);
+      if (hole.size() < 3 || !hole.is_simple()) return segments;
+      polygon.add_hole(hole);
+    }
+    auto skeleton = CGAL::create_interior_straight_skeleton_2(polygon);
+    if (!skeleton) return segments;
+    for (auto h = skeleton->halfedges_begin(); h != skeleton->halfedges_end();
+         ++h) {
+      if (!h->is_bisector() || &*h > &*h->opposite()) continue;
+      const auto& s = h->opposite()->vertex()->point();
+      const auto& t = h->vertex()->point();
+      if (CGAL::squared_distance(s, t) < double(min_length) * min_length)
+        continue;
+      segments.push_back({arr3f{float(s.x()), float(s.y()), 0},
+                          arr3f{float(t.x()), float(t.y()), 0}});
+    }
+    return segments;
+  }
 
 }  // namespace roofer::reconstruction

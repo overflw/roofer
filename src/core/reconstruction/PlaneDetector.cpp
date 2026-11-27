@@ -282,6 +282,11 @@ namespace roofer {
           if (points.size() > cfg.min_plane_points) {
             R.grow_regions_with_limits(PDS, DNTester, cfg.max_plane_count);
           }
+          if (cfg.merge_coplanar) {
+            planedect::merge_coplanar_regions(
+                PDS, R.regions, R.adjacencies, cfg.merge_max_angle,
+                cfg.merge_off_distance, cfg.merge_rms_slack);
+          }
           total_plane_cnt = R.regions.size();
 
           for (auto region : R.regions) {
