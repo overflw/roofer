@@ -361,63 +361,117 @@ TEST_CASE("walls short of their corner both run on to it") {
   CHECK(corner);
 }
 
-TEST_CASE("a structure the graph cut left a sliver of goes") {
+namespace {
+  // an arrangement with every bounded face in the footprint, labelled with
+  // plane 1; narrow planes are allowed only inside their outline
+  struct Labelled {
+    roofer::Arrangement_2 arr;
+    roofer::IndexedPlanesWithPoints planes;
+    std::map<int, Rectangle> narrow;
+    std::vector<int> ids;  // the graph cut's labels follow the planes' order
+
+    Labelled(std::vector<std::pair<Point2, Point2>> segments, int n_planes,
+             std::map<int, Rectangle> narrow_)
+        : narrow(narrow_) {
+      for (auto [a, b] : segments)
+        CGAL::insert(arr, roofer::Segment_2(roofer::Point_2(a[0], a[1]),
+                                            roofer::Point_2(b[0], b[1])));
+      for (int id = 1; id <= n_planes; ++id)
+        planes[id] = {roofer::Plane(0, 0, 1, -10 - id), {}};
+      for (auto& [id, plane] : planes) ids.push_back(id);
+      for (auto face : arr.face_handles()) {
+        if (face->is_unbounded()) continue;
+        face->data().in_footprint = true;
+        set(face, 1, {{1, 0}});
+      }
+    }
+    roofer::Arrangement_2::Face_handle at(double x, double y) {
+      auto located = CGAL::Arr_walk_along_line_point_location(arr).locate(
+          roofer::Point_2(x, y));
+      return arr.non_const_handle(
+          std::get<roofer::Arrangement_2::Face_const_handle>(located));
+    }
+    size_t label(int id) {
+      return std::find(ids.begin(), ids.end(), id) - ids.begin();
+    }
+    // `face` gets plane `id`; planes missing from `cost` cost 9
+    void set(roofer::Arrangement_2::Face_handle face, int id,
+             std::map<int, double> cost) {
+      face->data().label = label(id);
+      face->data().vertex_label_cost.clear();
+      for (auto i : ids)
+        face->data().vertex_label_cost.push_back(cost.count(i) ? cost[i] : 9);
+    }
+    bool allowed(roofer::Arrangement_2::Face_handle face, int id) {
+      if (!narrow.count(id)) return true;
+      auto he = face->outer_ccb(), first = he;
+      do {
+        if (!in_rectangle(narrow[id],
+                          CGAL::to_double(he->source()->point().x()),
+                          CGAL::to_double(he->source()->point().y()), 0.01))
+          return false;
+      } while (++he != first);
+      return true;
+    }
+    std::set<int> drop(
+        std::function<bool(roofer::Arrangement_2::Face_handle, int)> allow) {
+      std::set<int> ids;
+      for (auto& [id, r] : narrow) ids.insert(id);
+      return drop_small_labels(arr, planes, ids, allow);
+    }
+  };
+
   // a 10 x 10 roof (plane 1) with two walls 0.4 m wide across it (planes 2
-  // and 3); the cut gave wall 2 only 0.5 m of its length
-  roofer::Arrangement_2 arr;
-  for (auto [a, b] : {std::pair{Point2{0, 0}, Point2{10, 0}},
-                      {Point2{10, 0}, Point2{10, 10}},
-                      {Point2{10, 10}, Point2{0, 10}},
-                      {Point2{0, 10}, Point2{0, 0}},
-                      {Point2{4.8, 0}, Point2{4.8, 10}},
-                      {Point2{5.2, 0}, Point2{5.2, 10}},
-                      {Point2{4.8, 9.5}, Point2{5.2, 9.5}},
-                      {Point2{7.8, 0}, Point2{7.8, 10}},
-                      {Point2{8.2, 0}, Point2{8.2, 10}}})
-    CGAL::insert(arr, roofer::Segment_2(roofer::Point_2(a[0], a[1]),
-                                        roofer::Point_2(b[0], b[1])));
-  auto face_at = [&](double x, double y) {
-    auto located = CGAL::Arr_walk_along_line_point_location(arr).locate(
-        roofer::Point_2(x, y));
-    return arr.non_const_handle(
-        std::get<roofer::Arrangement_2::Face_const_handle>(located));
-  };
-  roofer::IndexedPlanesWithPoints planes{
-      {1, {roofer::Plane(0, 0, 1, -10), {}}},
-      {2, {roofer::Plane(0, 0, 1, -11), {}}},
-      {3, {roofer::Plane(0, 0, 1, -11), {}}}};
-  // the graph cut's labels follow the planes' order, its costs too
-  std::vector<int> ids;
-  for (auto& [id, plane] : planes) ids.push_back(id);
-  auto label = [&](int id) {
-    return size_t(std::find(ids.begin(), ids.end(), id) - ids.begin());
-  };
-  auto costs = [&](std::map<int, double> by_id) {
-    std::vector<double> c;
-    for (auto id : ids) c.push_back(by_id[id]);
-    return c;
-  };
-  for (auto face : arr.face_handles()) {
-    if (face->is_unbounded()) continue;
-    face->data().in_footprint = true;
-    face->data().label = label(1);
-    face->data().vertex_label_cost = costs({{1, 0}, {2, 9}, {3, 9}});
+  // and 3) and plane 4 east of them; the cut gave wall 2 only 0.5 m of its
+  // length, whose data fits plane 4 best after its own
+  Labelled walls() {
+    Labelled l({{{0, 0}, {10, 0}},
+                {{10, 0}, {10, 10}},
+                {{10, 10}, {0, 10}},
+                {{0, 10}, {0, 0}},
+                {{4.8, 0}, {4.8, 10}},
+                {{5.2, 0}, {5.2, 10}},
+                {{4.8, 9.5}, {5.2, 9.5}},
+                {{7.8, 0}, {7.8, 10}},
+                {{8.2, 0}, {8.2, 10}}},
+               4,
+               {{2, {Point2{4.8, 0}, {4.8, 10}, {5.2, 10}, {5.2, 0}}},
+                {3, {Point2{7.8, 0}, {7.8, 10}, {8.2, 10}, {8.2, 0}}}});
+    l.set(l.at(5, 9.75), 2, {{1, 1}, {2, 0}, {4, 0.5}});
+    l.set(l.at(8, 5), 3, {{3, 0}});
+    l.set(l.at(9, 5), 4, {{4, 0}});
+    return l;
   }
-  auto sliver = face_at(5, 9.75);
-  sliver->data().label = label(2);
-  sliver->data().vertex_label_cost = costs({{1, 1}, {2, 0}, {3, 9}});
-  face_at(8, 5)->data().label = label(3);
-  Rectangle wall2{Point2{4.8, 0}, Point2{4.8, 10}, Point2{5.2, 10},
-                  Point2{5.2, 0}},
-      wall3{Point2{7.8, 0}, Point2{7.8, 10}, Point2{8.2, 10}, Point2{8.2, 0}};
-  auto dropped = drop_small_labels(
-      arr, planes,
-      {{2, narrow_least_area(wall2)}, {3, narrow_least_area(wall3)}});
+}  // namespace
+
+TEST_CASE("a structure the graph cut left a sliver of goes") {
+  auto l = walls();
+  auto dropped = l.drop([&](auto f, int id) { return l.allowed(f, id); });
   CHECK(dropped == std::set<int>{2});
-  CHECK(sliver->data().segid == 1);
+  // to its neighbours' plane, not the cheaper one beyond them
+  CHECK(l.at(5, 9.75)->data().segid == 1);
+}
+
+TEST_CASE("a sliver with no allowed plane left stays") {
+  auto l = walls();
+  auto sliver = l.at(5, 9.75);
+  auto dropped = l.drop(
+      [&](auto f, int id) { return f == sliver ? id == 2 : l.allowed(f, id); });
+  CHECK(dropped.empty());
+  CHECK(sliver->data().label == l.label(2));
 }
 
 TEST_CASE("a short wall kept whole is no sliver") {
-  Rectangle wall{Point2{0, 0}, Point2{2, 0}, Point2{2, 0.2}, Point2{0, 0.2}};
-  CHECK(narrow_least_area(wall) < 0.4);
+  // a 2 x 0.2 m wall (plane 2) on a 4 x 4 roof
+  Labelled l({{{0, 0}, {4, 0}},
+              {{4, 0}, {4, 4}},
+              {{4, 4}, {0, 4}},
+              {{0, 4}, {0, 0}},
+              {{1.9, 1}, {2.1, 1}},
+              {{2.1, 1}, {2.1, 3}},
+              {{2.1, 3}, {1.9, 3}},
+              {{1.9, 3}, {1.9, 1}}},
+             2, {{2, {Point2{1.9, 1}, {1.9, 3}, {2.1, 3}, {2.1, 1}}}});
+  l.set(l.at(2, 2), 2, {{2, 0}});
+  CHECK(l.drop([&](auto f, int id) { return l.allowed(f, id); }).empty());
 }

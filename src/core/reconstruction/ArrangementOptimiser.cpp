@@ -215,6 +215,15 @@ namespace roofer::reconstruction {
     }
   };
 
+  // the roof planes in graph-cut label order, unclassified points ignored
+  static std::vector<int> roof_label_ids(
+      const IndexedPlanesWithPoints& roof_planes) {
+    std::vector<int> ids;
+    for (const auto& [id, plane] : roof_planes)
+      if (id > 0) ids.push_back(id);
+    return ids;
+  }
+
   class ArrangementOptimiser : public ArrangementOptimiserInterface {
     void compute(
         Arrangement_2& arr, const RasterTools::Raster& heightfield,
@@ -224,10 +233,9 @@ namespace roofer::reconstruction {
         std::function<bool(Arrangement_2::Face_handle, int)> allowed) override {
       std::vector<std::tuple<Plane, size_t>>
           points_per_plane;  // plane, points, seg_id
-      for (const auto& [plane_id, plane_pts] : roof_planes) {
-        if (plane_id < 1) continue;  // ignore unclassified points
-        points_per_plane.push_back(std::make_tuple(plane_pts.first, plane_id));
-      }
+      for (int plane_id : roof_label_ids(roof_planes))
+        points_per_plane.push_back(
+            std::make_tuple(roof_planes.at(plane_id).first, plane_id));
       size_t roofplane_cnt = points_per_plane.size();
       if (cfg.use_ground) {
         for (const auto& [plane_id, plane_pts] : ground_planes) {
@@ -387,42 +395,65 @@ namespace roofer::reconstruction {
     return linear_rings;
   }
 
-  std::set<int> drop_small_labels(Arrangement_2& arr,
-                                  const IndexedPlanesWithPoints& roof_planes,
-                                  const std::map<int, double>& least_area) {
-    std::vector<int> ids;  // per graph-cut label its roof plane
-    for (const auto& [id, plane] : roof_planes)
-      if (id > 0) ids.push_back(id);
+  std::set<int> drop_small_labels(
+      Arrangement_2& arr, const IndexedPlanesWithPoints& roof_planes,
+      const std::set<int>& narrow,
+      std::function<bool(Arrangement_2::Face_handle, int)> allowed) {
+    auto ids = roof_label_ids(roof_planes);
     auto labelled = [&](Face_handle face) {
       return face->data().in_footprint && face->data().label < ids.size();
     };
-    std::map<int, double> area;
+    std::map<int, double> covered, outline;
     for (auto face : arr.face_handles()) {
-      if (!labelled(face) || !least_area.count(ids[face->data().label]))
-        continue;
-      area[ids[face->data().label]] +=
-          CGAL::to_double(arr_cell2polygon(face).area());
+      if (!labelled(face)) continue;
+      double area = CGAL::to_double(arr_cell2polygon(face).area());
+      for (int id : narrow)
+        if (allowed(face, id)) outline[id] += area;
+      if (narrow.count(ids[face->data().label]))
+        covered[ids[face->data().label]] += area;
     }
-    std::set<int> dropped;
-    for (auto [id, least] : least_area)
-      if (area[id] < least) dropped.insert(id);
+    std::set<int> small;
+    for (int id : narrow)
+      if (covered[id] <
+          std::min(outline[id] / 2, std::max(0.5, outline[id] / 4)))
+        small.insert(id);
+    auto fits = [&](Face_handle face, size_t i) {
+      return !small.count(ids[i]) && allowed(face, ids[i]);
+    };
+    std::vector<std::pair<Face_handle, size_t>> moves;
+    std::set<int> kept;
     for (auto face : arr.face_handles()) {
-      if (!labelled(face) || !dropped.count(ids[face->data().label])) continue;
+      if (!labelled(face) || !small.count(ids[face->data().label])) continue;
+      std::set<size_t> near;
+      auto he = face->outer_ccb(), first = he;
+      do {
+        auto other = he->twin()->face();
+        if (labelled(other) && fits(face, other->data().label))
+          near.insert(other->data().label);
+      } while (++he != first);
       auto& cost = face->data().vertex_label_cost;
       size_t best = ids.size();
       double best_cost = std::numeric_limits<double>::infinity();
       for (size_t i = 0; i < ids.size(); ++i)
-        if (!dropped.count(ids[i]) && cost[i] < best_cost) {
+        if ((near.empty() ? fits(face, i) : near.count(i) > 0) &&
+            cost[i] < best_cost) {
           best = i;
           best_cost = cost[i];
         }
-      if (best == ids.size()) continue;
+      if (best == ids.size())
+        kept.insert(ids[face->data().label]);
+      else
+        moves.emplace_back(face, best);
+    }
+    for (auto [face, best] : moves) {
+      if (kept.count(ids[face->data().label])) continue;
       face->data().label = best;
       face->data().plane = roof_planes.at(ids[best]).first;
       face->data().segid = ids[best];
-      face->data().rms_error_to_avg = cost[best];
+      face->data().rms_error_to_avg = face->data().vertex_label_cost[best];
     }
-    return dropped;
+    for (int id : kept) small.erase(id);
+    return small;
   }
 
   std::unique_ptr<ArrangementOptimiserInterface> createArrangementOptimiser() {
