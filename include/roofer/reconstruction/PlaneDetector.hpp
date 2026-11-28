@@ -96,8 +96,8 @@ namespace roofer::reconstruction {
     "it.",                                                                     \
     config::greater_than(0.0F), public_)                                       \
   X(float, narrow_max_height, 3.0F,                                            \
-    "Greatest height, in metres, a narrow structure stands over the highest "  \
-    "roof plane.",                                                             \
+    "Greatest height, in metres, a narrow structure stands over the median "   \
+    "height of the highest roof plane.",                                       \
     config::greater_than(0.0F), public_)                                       \
   X(float, narrow_min_length, 4.0F,                                            \
     "Least length, in metres, of a narrow structure away from the footprint "  \

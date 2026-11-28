@@ -175,7 +175,7 @@ plane detector:
 narrow-planes = true
 narrow-max-slope = 10.0   # degrees, steepest roof a structure stands on
 narrow-min-height = 0.5   # m over the roof on both sides
-narrow-max-height = 3.0   # m over the highest roof plane
+narrow-max-height = 3.0   # m over the highest roof plane's median
 narrow-min-length = 4.0   # m, for structures away from the footprint
 ```
 
@@ -195,7 +195,7 @@ flowchart LR
    2r, unsegmented or in a plane that mostly stands, are split into straight
    runs at most sqrt(3)·r wide. A run that stands `narrow-min-height` over the
    roof on both sides, but not more than `narrow-max-height` over the
-   building's highest plane (a wire, or the ridge of a roof the detector
+   median height of the building's highest plane (a wire, or the ridge of a roof the detector
    missed), becomes a plane, level across, outlined by its
    rectangle. Pieces in line at one height are merged; ends run on over
    unsegmented points, to the footprint within 4r, and across a structure they
