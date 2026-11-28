@@ -416,3 +416,8 @@ TEST_CASE("a structure the graph cut left a sliver of goes") {
   CHECK(dropped == std::set<int>{2});
   CHECK(sliver->data().segid == 1);
 }
+
+TEST_CASE("a short wall kept whole is no sliver") {
+  Rectangle wall{Point2{0, 0}, Point2{2, 0}, Point2{2, 0.2}, Point2{0, 0.2}};
+  CHECK(narrow_least_area(wall) < 0.4);
+}
