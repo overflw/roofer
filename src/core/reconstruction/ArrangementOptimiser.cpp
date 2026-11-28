@@ -26,6 +26,7 @@
 #include <CGAL/property_map.h>
 
 #include <algorithm>
+#include <limits>
 #include <roofer/reconstruction/ArrangementBase.hpp>
 #include <roofer/reconstruction/ArrangementOptimiser.hpp>
 #include <vector>
@@ -399,14 +400,8 @@ namespace roofer::reconstruction {
     for (auto face : arr.face_handles()) {
       if (!labelled(face) || !least_area.count(ids[face->data().label]))
         continue;
-      vec2f ring;
-      arrangementface_to_polygon(face, ring);
-      double a = 0;
-      for (size_t i = 0; i < ring.size(); ++i) {
-        auto &p = ring[i], &q = ring[(i + 1) % ring.size()];
-        a += (p[0] * q[1] - q[0] * p[1]) / 2;
-      }
-      area[ids[face->data().label]] += a;
+      area[ids[face->data().label]] +=
+          CGAL::to_double(arr_cell2polygon(face).area());
     }
     std::set<int> dropped;
     for (auto [id, least] : least_area)
@@ -415,10 +410,12 @@ namespace roofer::reconstruction {
       if (!labelled(face) || !dropped.count(ids[face->data().label])) continue;
       auto& cost = face->data().vertex_label_cost;
       size_t best = ids.size();
+      double best_cost = std::numeric_limits<double>::infinity();
       for (size_t i = 0; i < ids.size(); ++i)
-        if (!dropped.count(ids[i]) &&
-            (best == ids.size() || cost[i] < cost[best]))
+        if (!dropped.count(ids[i]) && cost[i] < best_cost) {
           best = i;
+          best_cost = cost[i];
+        }
       if (best == ids.size()) continue;
       face->data().label = best;
       face->data().plane = roof_planes.at(ids[best]).first;

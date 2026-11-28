@@ -403,8 +403,9 @@ TEST_CASE("a structure the graph cut left a sliver of goes") {
     face->data().label = label(1);
     face->data().vertex_label_cost = costs({{1, 0}, {2, 9}, {3, 9}});
   }
-  face_at(5, 9.75)->data().label = label(2);
-  face_at(5, 9.75)->data().vertex_label_cost = costs({{1, 1}, {2, 0}, {3, 9}});
+  auto sliver = face_at(5, 9.75);
+  sliver->data().label = label(2);
+  sliver->data().vertex_label_cost = costs({{1, 1}, {2, 0}, {3, 9}});
   face_at(8, 5)->data().label = label(3);
   Rectangle wall2{Point2{4.8, 0}, Point2{4.8, 10}, Point2{5.2, 10},
                   Point2{5.2, 0}},
@@ -413,5 +414,5 @@ TEST_CASE("a structure the graph cut left a sliver of goes") {
       arr, planes,
       {{2, narrow_least_area(wall2)}, {3, narrow_least_area(wall3)}});
   CHECK(dropped == std::set<int>{2});
-  CHECK(face_at(5, 9.75)->data().segid == 1);
+  CHECK(sliver->data().segid == 1);
 }
