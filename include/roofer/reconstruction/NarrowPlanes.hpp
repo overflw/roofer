@@ -110,6 +110,14 @@ namespace roofer::reconstruction {
     }
   }
 
+  // The least area the faces of a structure outlined by `r` cover, else they
+  // are a sliver of it: a quarter of `r`, and 0.5 m² but at most half of `r`.
+  inline double narrow_least_area(const Rectangle& r) {
+    double width = std::hypot(r[3][0] - r[0][0], r[3][1] - r[0][1]),
+           area = rectangle_axis(r)[2] * width;
+    return std::min(area / 2, std::max(0.5, area / 4));
+  }
+
   /**
    * The lines a narrow plane's outline puts in the arrangement: its long
    * sides, carried on like the regularised lines by `extension`, but no
