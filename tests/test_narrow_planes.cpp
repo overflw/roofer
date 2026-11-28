@@ -372,7 +372,7 @@ namespace {
 
     Labelled(std::vector<std::pair<Point2, Point2>> segments, int n_planes,
              std::map<int, Rectangle> narrow_)
-        : narrow(narrow_) {
+        : narrow(std::move(narrow_)) {
       for (auto [a, b] : segments)
         CGAL::insert(arr, roofer::Segment_2(roofer::Point_2(a[0], a[1]),
                                             roofer::Point_2(b[0], b[1])));
@@ -403,21 +403,16 @@ namespace {
         face->data().vertex_label_cost.push_back(cost.count(i) ? cost[i] : 9);
     }
     bool allowed(roofer::Arrangement_2::Face_handle face, int id) {
-      if (!narrow.count(id)) return true;
-      auto he = face->outer_ccb(), first = he;
-      do {
-        if (!in_rectangle(narrow[id],
-                          CGAL::to_double(he->source()->point().x()),
-                          CGAL::to_double(he->source()->point().y()), 0.01))
-          return false;
-      } while (++he != first);
-      return true;
+      return !narrow.count(id) || face_in_rectangle(face, narrow[id], 0.01);
     }
     std::set<int> drop(
         std::function<bool(roofer::Arrangement_2::Face_handle, int)> allow) {
-      std::set<int> ids;
-      for (auto& [id, r] : narrow) ids.insert(id);
-      return drop_small_labels(arr, planes, ids, allow);
+      std::set<int> narrow_ids;
+      for (auto& [id, r] : narrow) narrow_ids.insert(id);
+      return drop_small_labels(arr, planes, narrow_ids, allow);
+    }
+    std::set<int> drop() {
+      return drop([&](auto f, int id) { return allowed(f, id); });
     }
   };
 
@@ -446,7 +441,7 @@ namespace {
 
 TEST_CASE("a structure the graph cut left a sliver of goes") {
   auto l = walls();
-  auto dropped = l.drop([&](auto f, int id) { return l.allowed(f, id); });
+  auto dropped = l.drop();
   CHECK(dropped == std::set<int>{2});
   // to its neighbours' plane, not the cheaper one beyond them
   CHECK(l.at(5, 9.75)->data().segid == 1);
@@ -473,5 +468,5 @@ TEST_CASE("a short wall kept whole is no sliver") {
               {{1.9, 3}, {1.9, 1}}},
              2, {{2, {Point2{1.9, 1}, {1.9, 3}, {2.1, 3}, {2.1, 1}}}});
   l.set(l.at(2, 2), 2, {{2, 0}});
-  CHECK(l.drop([&](auto f, int id) { return l.allowed(f, id); }).empty());
+  CHECK(l.drop().empty());
 }

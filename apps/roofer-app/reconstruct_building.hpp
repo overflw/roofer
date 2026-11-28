@@ -594,16 +594,8 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
     // a narrow plane labels only cells within its outline
     auto on_outline = [&](roofer::Arrangement_2::Face_handle f, int id) {
       auto n = narrow.find(id);
-      if (n == narrow.end()) return true;
-      if (f->number_of_holes() > 0) return false;
-      auto he = f->outer_ccb(), first = he;
-      do {
-        if (!roofer::reconstruction::in_rectangle(
-                n->second, CGAL::to_double(he->source()->point().x()),
-                CGAL::to_double(he->source()->point().y()), outline_margin))
-          return false;
-      } while (++he != first);
-      return true;
+      return n == narrow.end() || roofer::reconstruction::face_in_rectangle(
+                                      f, n->second, outline_margin);
     };
     ArrangementOptimiser->compute(
         arrangement, SegmentRasteriser->heightfield,

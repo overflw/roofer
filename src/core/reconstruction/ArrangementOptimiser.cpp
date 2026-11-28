@@ -26,7 +26,7 @@
 #include <CGAL/property_map.h>
 
 #include <algorithm>
-#include <limits>
+#include <optional>
 #include <roofer/reconstruction/ArrangementBase.hpp>
 #include <roofer/reconstruction/ArrangementOptimiser.hpp>
 #include <vector>
@@ -399,6 +399,7 @@ namespace roofer::reconstruction {
       Arrangement_2& arr, const IndexedPlanesWithPoints& roof_planes,
       const std::set<int>& narrow,
       std::function<bool(Arrangement_2::Face_handle, int)> allowed) {
+    if (narrow.empty()) return {};
     auto ids = roof_label_ids(roof_planes);
     auto labelled = [&](Face_handle face) {
       return face->data().in_footprint && face->data().label < ids.size();
@@ -406,17 +407,23 @@ namespace roofer::reconstruction {
     std::map<int, double> covered, outline;
     for (auto face : arr.face_handles()) {
       if (!labelled(face)) continue;
-      double area = CGAL::to_double(arr_cell2polygon(face).area());
+      std::optional<double> a;
+      auto area = [&] {
+        if (!a) a = CGAL::to_double(arr_cell2polygon(face).area());
+        return *a;
+      };
       for (int id : narrow)
-        if (allowed(face, id)) outline[id] += area;
+        if (allowed(face, id)) outline[id] += area();
       if (narrow.count(ids[face->data().label]))
-        covered[ids[face->data().label]] += area;
+        covered[ids[face->data().label]] += area();
     }
+    // a quarter of the outline, and 0.5 m² but at most half of it
+    auto least_area = [](double outline) {
+      return std::min(outline / 2, std::max(0.5, outline / 4));
+    };
     std::set<int> small;
     for (int id : narrow)
-      if (covered[id] <
-          std::min(outline[id] / 2, std::max(0.5, outline[id] / 4)))
-        small.insert(id);
+      if (covered[id] < least_area(outline[id])) small.insert(id);
     auto fits = [&](Face_handle face, size_t i) {
       return !small.count(ids[i]) && allowed(face, ids[i]);
     };
@@ -424,22 +431,25 @@ namespace roofer::reconstruction {
     std::set<int> kept;
     for (auto face : arr.face_handles()) {
       if (!labelled(face) || !small.count(ids[face->data().label])) continue;
-      std::set<size_t> near;
-      auto he = face->outer_ccb(), first = he;
-      do {
-        auto other = he->twin()->face();
-        if (labelled(other) && fits(face, other->data().label))
-          near.insert(other->data().label);
-      } while (++he != first);
       auto& cost = face->data().vertex_label_cost;
-      size_t best = ids.size();
-      double best_cost = std::numeric_limits<double>::infinity();
-      for (size_t i = 0; i < ids.size(); ++i)
-        if ((near.empty() ? fits(face, i) : near.count(i) > 0) &&
-            cost[i] < best_cost) {
-          best = i;
-          best_cost = cost[i];
-        }
+      auto cheapest = [&](auto candidate) {
+        size_t best = ids.size();
+        for (size_t i = 0; i < ids.size(); ++i)
+          if (fits(face, i) && candidate(i) &&
+              (best == ids.size() || cost[i] < cost[best]))
+            best = i;
+        return best;
+      };
+      auto neighbour = [&](size_t i) {
+        auto he = face->outer_ccb(), first = he;
+        do {
+          auto other = he->twin()->face();
+          if (labelled(other) && other->data().label == i) return true;
+        } while (++he != first);
+        return false;
+      };
+      size_t best = cheapest(neighbour);
+      if (best == ids.size()) best = cheapest([](size_t) { return true; });
       if (best == ids.size())
         kept.insert(ids[face->data().label]);
       else

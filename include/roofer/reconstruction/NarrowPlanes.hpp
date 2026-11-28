@@ -472,6 +472,20 @@ namespace roofer::reconstruction {
     return u >= -margin && u <= lu + margin && v >= -margin && v <= lv + margin;
   }
 
+  // Whether arrangement face `f` has no holes and lies in `r`, within
+  // `margin` (`to_double` is CGAL's, found by argument lookup).
+  template <typename Face_handle>
+  bool face_in_rectangle(Face_handle f, const Rectangle& r, double margin) {
+    if (f->number_of_holes() > 0) return false;
+    auto he = f->outer_ccb(), first = he;
+    do {
+      auto& p = he->source()->point();
+      if (!in_rectangle(r, to_double(p.x()), to_double(p.y()), margin))
+        return false;
+    } while (++he != first);
+    return true;
+  }
+
   /**
    * Narrow structures in a building's segmentation (narrow-planes): wall tops
    * and parapets, each a plane of its own outlined by a rectangle, too narrow
