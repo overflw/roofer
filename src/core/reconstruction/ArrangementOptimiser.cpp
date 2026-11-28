@@ -424,9 +424,9 @@ namespace roofer::reconstruction {
     auto least_area = [](double outline) {
       return std::min(outline / 2, std::max(0.5, outline / 4));
     };
-    std::set<int> small;
+    std::set<int> thin, small;
     for (int id : narrow)
-      if (covered[id] < least_area(outline[id])) small.insert(id);
+      if (covered[id] < least_area(outline[id])) thin.insert(id);
     auto pending = [&](Face_handle face) {
       return labelled(face) && small.count(ids[face->data().label]);
     };
@@ -443,14 +443,18 @@ namespace roofer::reconstruction {
       return best;
     };
     std::vector<Face_handle> faces;
-    std::set<int> kept;
     for (auto face : arr.face_handles())
-      if (pending(face)) {
+      if (labelled(face) && thin.count(ids[face->data().label]))
         faces.push_back(face);
-        if (cheapest(face, fits) == ids.size())
-          kept.insert(ids[face->data().label]);
-      }
-    for (int id : kept) small.erase(id);
+    // a plane goes only if each of its faces and those of the planes gone
+    // before keeps an allowed plane that stays
+    for (int id : thin) {
+      small.insert(id);
+      if (std::any_of(faces.begin(), faces.end(), [&](Face_handle face) {
+            return pending(face) && cheapest(face, fits) == ids.size();
+          }))
+        small.erase(id);
+    }
     auto relabel = [&](Face_handle face, size_t best) {
       face->data().label = best;
       face->data().plane = roof_planes.at(ids[best]).first;

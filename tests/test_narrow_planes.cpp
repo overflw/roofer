@@ -484,7 +484,8 @@ TEST_CASE("a sliver face inside another follows it to its plane") {
 
 TEST_CASE("a sliver can go to a neighbouring sliver that stays") {
   // wall 2 across the roof, wall 3 along its top east of it; the cut gave
-  // each a cell of 0.5 m length, and wall 3's cell has no other plane
+  // each a cell of 0.5 m length; wall 3's cell has no other plane, wall 2's
+  // none but wall 3
   Labelled l({{{0, 0}, {10, 0}},
               {{10, 0}, {10, 10}},
               {{10, 10}, {0, 10}},
@@ -501,7 +502,9 @@ TEST_CASE("a sliver can go to a neighbouring sliver that stays") {
   l.set(sliver, 2, {{1, 1}, {2, 0}, {3, 0.5}});
   l.set(stuck, 3, {{3, 0}});
   auto dropped = l.drop([&](auto f, int id) {
-    return f == stuck ? id == 3 : f == sliver || l.allowed(f, id);
+    return f == stuck    ? id == 3
+           : f == sliver ? id == 2 || id == 3
+                         : l.allowed(f, id);
   });
   CHECK(dropped == std::set<int>{2});
   CHECK(sliver->data().segid == 3);
