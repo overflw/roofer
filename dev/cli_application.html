@@ -1049,6 +1049,7 @@ plane detector:</p>
 <span class="n">narrow-planes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
 <span class="n">narrow-max-slope</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">10.0</span><span class="w">   </span><span class="c1"># degrees, steepest roof a structure stands on</span>
 <span class="n">narrow-min-height</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5</span><span class="w">   </span><span class="c1"># m over the roof on both sides</span>
+<span class="n">narrow-max-height</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">3.0</span><span class="w">   </span><span class="c1"># m over the highest roof plane&#39;s median</span>
 <span class="n">narrow-min-length</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">4.0</span><span class="w">   </span><span class="c1"># m, for structures away from the footprint</span>
 </pre></div>
 </div>
@@ -1056,7 +1057,9 @@ plane detector:</p>
 <li><p>Points that stand more than <code class="docutils literal notranslate"><span class="pre">plane-epsilon</span></code> over a less steep plane within
 2r, unsegmented or in a plane that mostly stands, are split into straight
 runs at most sqrt(3)·r wide. A run that stands <code class="docutils literal notranslate"><span class="pre">narrow-min-height</span></code> over the
-roof on both sides becomes a plane, level across, outlined by its
+roof on both sides, but not more than <code class="docutils literal notranslate"><span class="pre">narrow-max-height</span></code> over the
+median height of the building’s highest plane (a wire, or the ridge of a roof the detector
+missed), becomes a plane, level across, outlined by its
 rectangle. Pieces in line at one height are merged; ends run on over
 unsegmented points, to the footprint within 4r, and across a structure they
 meet at a T or a corner.</p></li>
@@ -1233,6 +1236,8 @@ could save. The faces beside it take the roof planes as usual.</p></li>
 <span class="n">narrow-max-slope</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">10</span>
 <span class="c1">## Least height, in metres, a narrow structure stands over the roof beside it.</span>
 <span class="n">narrow-min-height</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5</span>
+<span class="c1">## Greatest height, in metres, a narrow structure stands over the median height of the highest roof plane.</span>
+<span class="n">narrow-max-height</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">3</span>
 <span class="c1">## Least length, in metres, of a narrow structure away from the footprint and with roof of one height on both sides.</span>
 <span class="n">narrow-min-length</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4</span>
 <span class="c1">## Merge adjacent region-grown planes that one plane fits about as well.</span>
