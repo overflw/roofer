@@ -610,6 +610,13 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
         PlaneDetector->pts_per_roofplane,
         PlaneDetector_ground->pts_per_roofplane, optimiser_config,
         narrow.empty() ? nullptr : std::function(on_outline));
+    // a structure the graph cut left only a sliver of goes
+    std::map<int, double> least_area;
+    for (const auto& [id, r] : narrow)
+      least_area[id] = roofer::reconstruction::narrow_least_area(r);
+    for (auto id : roofer::reconstruction::drop_small_labels(
+             arrangement, PlaneDetector->pts_per_roofplane, least_area))
+      narrow.erase(id);
     timings["ArrangementOptimiser"] =
         std::chrono::high_resolution_clock::now() - t0;
     // logger.debug("Completed ArrangementOptimiser");

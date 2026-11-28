@@ -1,4 +1,6 @@
 #include <roofer/reconstruction/NarrowPlanes.hpp>
+#include <roofer/reconstruction/ArrangementOptimiser.hpp>
+#include <CGAL/Arr_walk_along_line_point_location.h>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 #include <random>
@@ -357,6 +359,67 @@ TEST_CASE("walls short of their corner both run on to it") {
   bool corner = false;  // the outer corner of the wall top
   for (auto& [k, r] : narrow) corner |= in_rectangle(r, 10.1, 4.9, 0);
   CHECK(corner);
+}
+
+TEST_CASE("a structure the graph cut left a sliver of goes") {
+  // a 10 x 10 roof (plane 1) with two walls 0.4 m wide across it (planes 2
+  // and 3); the cut gave wall 2 only 0.5 m of its length
+  roofer::Arrangement_2 arr;
+  for (auto [a, b] : {std::pair{Point2{0, 0}, Point2{10, 0}},
+                      {Point2{10, 0}, Point2{10, 10}},
+                      {Point2{10, 10}, Point2{0, 10}},
+                      {Point2{0, 10}, Point2{0, 0}},
+                      {Point2{4.8, 0}, Point2{4.8, 10}},
+                      {Point2{5.2, 0}, Point2{5.2, 10}},
+                      {Point2{4.8, 9.5}, Point2{5.2, 9.5}},
+                      {Point2{7.8, 0}, Point2{7.8, 10}},
+                      {Point2{8.2, 0}, Point2{8.2, 10}}})
+    CGAL::insert(arr, roofer::Segment_2(roofer::Point_2(a[0], a[1]),
+                                        roofer::Point_2(b[0], b[1])));
+  auto face_at = [&](double x, double y) {
+    auto located = CGAL::Arr_walk_along_line_point_location(arr).locate(
+        roofer::Point_2(x, y));
+    return arr.non_const_handle(
+        std::get<roofer::Arrangement_2::Face_const_handle>(located));
+  };
+  roofer::IndexedPlanesWithPoints planes{
+      {1, {roofer::Plane(0, 0, 1, -10), {}}},
+      {2, {roofer::Plane(0, 0, 1, -11), {}}},
+      {3, {roofer::Plane(0, 0, 1, -11), {}}}};
+  // the graph cut's labels follow the planes' order, its costs too
+  std::vector<int> ids;
+  for (auto& [id, plane] : planes) ids.push_back(id);
+  auto label = [&](int id) {
+    return size_t(std::find(ids.begin(), ids.end(), id) - ids.begin());
+  };
+  auto costs = [&](std::map<int, double> by_id) {
+    std::vector<double> c;
+    for (auto id : ids) c.push_back(by_id[id]);
+    return c;
+  };
+  for (auto face : arr.face_handles()) {
+    if (face->is_unbounded()) continue;
+    face->data().in_footprint = true;
+    face->data().label = label(1);
+    face->data().vertex_label_cost = costs({{1, 0}, {2, 9}, {3, 9}});
+  }
+  auto sliver = face_at(5, 9.75);
+  sliver->data().label = label(2);
+  sliver->data().vertex_label_cost = costs({{1, 1}, {2, 0}, {3, 9}});
+  face_at(8, 5)->data().label = label(3);
+  Rectangle wall2{Point2{4.8, 0}, Point2{4.8, 10}, Point2{5.2, 10},
+                  Point2{5.2, 0}},
+      wall3{Point2{7.8, 0}, Point2{7.8, 10}, Point2{8.2, 10}, Point2{8.2, 0}};
+  auto dropped = drop_small_labels(
+      arr, planes,
+      {{2, narrow_least_area(wall2)}, {3, narrow_least_area(wall3)}});
+  CHECK(dropped == std::set<int>{2});
+  CHECK(sliver->data().segid == 1);
+}
+
+TEST_CASE("a short wall kept whole is no sliver") {
+  Rectangle wall{Point2{0, 0}, Point2{2, 0}, Point2{2, 0.2}, Point2{0, 0.2}};
+  CHECK(narrow_least_area(wall) < 0.4);
 }
 
 TEST_CASE("a structure far over the highest roof is no wall") {
