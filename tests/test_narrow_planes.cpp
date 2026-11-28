@@ -373,9 +373,7 @@ namespace {
     Labelled(std::vector<std::pair<Point2, Point2>> segments, int n_planes,
              std::map<int, Rectangle> narrow_)
         : narrow(std::move(narrow_)) {
-      for (auto [a, b] : segments)
-        CGAL::insert(arr, roofer::Segment_2(roofer::Point_2(a[0], a[1]),
-                                            roofer::Point_2(b[0], b[1])));
+      add(segments);
       for (int id = 1; id <= n_planes; ++id)
         planes[id] = {roofer::Plane(0, 0, 1, -10 - id), {}};
       for (auto& [id, plane] : planes) ids.push_back(id);
@@ -384,6 +382,11 @@ namespace {
         face->data().in_footprint = true;
         set(face, 1, {{1, 0}});
       }
+    }
+    void add(std::vector<std::pair<Point2, Point2>> segments) {
+      for (auto [a, b] : segments)
+        CGAL::insert(arr, roofer::Segment_2(roofer::Point_2(a[0], a[1]),
+                                            roofer::Point_2(b[0], b[1])));
     }
     roofer::Arrangement_2::Face_handle at(double x, double y) {
       auto located = CGAL::Arr_walk_along_line_point_location(arr).locate(
@@ -463,6 +466,54 @@ TEST_CASE("a sliver with no allowed plane left stays") {
       [&](auto f, int id) { return f == sliver ? id == 2 : l.allowed(f, id); });
   CHECK(dropped.empty());
   CHECK(sliver->data().label == l.label(2));
+}
+
+TEST_CASE("a sliver face inside another follows it to its plane") {
+  auto l = walls();
+  l.add({{{4.9, 9.6}, {5.1, 9.6}},
+         {{5.1, 9.6}, {5.1, 9.9}},
+         {{5.1, 9.9}, {4.9, 9.9}},
+         {{4.9, 9.9}, {4.9, 9.6}}});
+  auto inner = l.at(5, 9.75);
+  inner->data().in_footprint = true;
+  l.set(inner, 2, {{1, 1}, {2, 0}, {4, 0.5}});
+  l.set(l.at(5, 9.55), 2, {{1, 1}, {2, 0}, {4, 0.5}});
+  CHECK(l.drop() == std::set<int>{2});
+  CHECK(inner->data().segid == 1);
+}
+
+TEST_CASE("a sliver can go to a neighbouring sliver that stays") {
+  // wall 2 across the roof, wall 3 along its top east of it; the cut gave
+  // each a cell of 0.5 m length, and wall 2's cell has no plane but wall 3
+  Labelled l({{{0, 0}, {10, 0}},
+              {{10, 0}, {10, 10}},
+              {{10, 10}, {0, 10}},
+              {{0, 10}, {0, 0}},
+              {{4.8, 0}, {4.8, 10}},
+              {{5.2, 0}, {5.2, 10}},
+              {{4.8, 9.5}, {7, 9.5}},
+              {{7, 9.5}, {7, 10}},
+              {{5.7, 9.5}, {5.7, 10}}},
+             3,
+             {{2, {Point2{4.8, 0}, {4.8, 10}, {5.2, 10}, {5.2, 0}}},
+              {3, {Point2{5.2, 9.5}, {5.2, 10}, {7, 10}, {7, 9.5}}}});
+  auto sliver = l.at(5, 9.75), stuck = l.at(5.5, 9.75);
+  l.set(sliver, 2, {{1, 1}, {2, 0}, {3, 0.5}});
+  l.set(stuck, 3, {{3, 0}});
+  auto drop = [&](bool stuck_can_go) {
+    return l.drop([&](auto f, int id) {
+      return f == stuck    ? id == 3 || (stuck_can_go && id == 1)
+             : f == sliver ? id == 2 || id == 3
+                           : l.allowed(f, id);
+    });
+  };
+  SECTION("wall 3's cell has no other plane") {
+    CHECK(drop(false) == std::set<int>{2});
+  }
+  SECTION("wall 3 stays for wall 2's cell, although its own could go") {
+    CHECK(drop(true) == std::set<int>{2});
+  }
+  CHECK(sliver->data().segid == 3);
 }
 
 TEST_CASE("a short wall kept whole is no sliver") {

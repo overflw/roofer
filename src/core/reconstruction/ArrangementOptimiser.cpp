@@ -424,48 +424,72 @@ namespace roofer::reconstruction {
     auto least_area = [](double outline) {
       return std::min(outline / 2, std::max(0.5, outline / 4));
     };
-    std::set<int> small;
+    std::set<int> thin, small;
     for (int id : narrow)
-      if (covered[id] < least_area(outline[id])) small.insert(id);
-    auto fits = [&](Face_handle face, size_t i) {
-      return !small.count(ids[i]) && allowed(face, ids[i]);
+      if (covered[id] < least_area(outline[id])) thin.insert(id);
+    auto pending = [&](Face_handle face) {
+      return labelled(face) && small.count(ids[face->data().label]);
     };
-    std::vector<std::pair<Face_handle, size_t>> moves;
-    std::set<int> kept;
-    for (auto face : arr.face_handles()) {
-      if (!labelled(face) || !small.count(ids[face->data().label])) continue;
+    auto fits = [&](size_t i) { return !small.count(ids[i]); };
+    // on equal cost the lower plane id, not the hash order of the planes
+    auto cheapest = [&](Face_handle face, auto candidate) {
       auto& cost = face->data().vertex_label_cost;
-      auto cheapest = [&](auto candidate) {
-        size_t best = ids.size();
-        for (size_t i = 0; i < ids.size(); ++i)
-          if (fits(face, i) && candidate(i) &&
-              (best == ids.size() || cost[i] < cost[best]))
-            best = i;
-        return best;
-      };
-      auto neighbour = [&](size_t i) {
-        auto he = face->outer_ccb(), first = he;
-        do {
-          auto other = he->twin()->face();
-          if (labelled(other) && other->data().label == i) return true;
-        } while (++he != first);
-        return false;
-      };
-      size_t best = cheapest(neighbour);
-      if (best == ids.size()) best = cheapest([](size_t) { return true; });
-      if (best == ids.size())
-        kept.insert(ids[face->data().label]);
-      else
-        moves.emplace_back(face, best);
+      size_t best = ids.size();
+      for (size_t i = 0; i < ids.size(); ++i)
+        if (candidate(i) && allowed(face, ids[i]) &&
+            (best == ids.size() || cost[i] < cost[best] ||
+             (cost[i] == cost[best] && ids[i] < ids[best])))
+          best = i;
+      return best;
+    };
+    std::vector<Face_handle> faces;
+    for (auto face : arr.face_handles())
+      if (labelled(face) && thin.count(ids[face->data().label]))
+        faces.push_back(face);
+    // a plane goes only if each of its faces and those of the planes gone
+    // before keeps an allowed plane that stays
+    for (int id : thin) {
+      small.insert(id);
+      if (std::any_of(faces.begin(), faces.end(), [&](Face_handle face) {
+            return pending(face) && cheapest(face, fits) == ids.size();
+          }))
+        small.erase(id);
     }
-    for (auto [face, best] : moves) {
-      if (kept.count(ids[face->data().label])) continue;
+    auto relabel = [&](Face_handle face, size_t best) {
       face->data().label = best;
       face->data().plane = roof_planes.at(ids[best]).first;
       face->data().segid = ids[best];
       face->data().rms_error_to_avg = face->data().vertex_label_cost[best];
+    };
+    auto neighbour_labels = [&](Face_handle face) {
+      std::set<size_t> labels;
+      auto add = [&](auto he) {
+        auto first = he;
+        do {
+          auto other = he->twin()->face();
+          if (labelled(other)) labels.insert(other->data().label);
+        } while (++he != first);
+      };
+      add(face->outer_ccb());
+      for (auto h = face->inner_ccbs_begin(); h != face->inner_ccbs_end(); ++h)
+        add(*h);
+      return labels;
+    };
+    // in rounds, so a face can follow a neighbour relabelled before it
+    while (true) {
+      std::vector<std::pair<Face_handle, size_t>> moves;
+      for (auto face : faces) {
+        if (!pending(face)) continue;
+        auto near = neighbour_labels(face);
+        size_t best =
+            cheapest(face, [&](size_t i) { return fits(i) && near.count(i); });
+        if (best != ids.size()) moves.emplace_back(face, best);
+      }
+      if (moves.empty()) break;
+      for (auto [face, best] : moves) relabel(face, best);
     }
-    for (int id : kept) small.erase(id);
+    for (auto face : faces)
+      if (pending(face)) relabel(face, cheapest(face, fits));
     return small;
   }
 
