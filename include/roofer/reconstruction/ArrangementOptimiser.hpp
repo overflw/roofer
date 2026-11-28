@@ -86,9 +86,11 @@ namespace roofer::reconstruction {
   /**
    * After the graph cut: a roof plane in `narrow` whose faces cover less than a
    * quarter of its outline (the faces of the footprint, ground ones included,
-   * that `allowed` gives it) or 0.5 m², but at most half of it, goes. Each of
-   * its faces takes the cheapest allowed roof plane of its neighbours, else of
-   * all; a plane stays if one of its faces has none.
+   * that `allowed` gives it) or 0.5 m², but at most half of it, goes, unless
+   * one of its faces allows only such small planes. Its faces take the
+   * cheapest allowed plane among their neighbours', in rounds so a face can
+   * follow a relabelled neighbour, and then the cheapest allowed plane of all.
+   * Equal costs go to the lower plane id.
    *
    * @return the planes that went
    */
