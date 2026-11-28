@@ -447,6 +447,15 @@ TEST_CASE("a structure the graph cut left a sliver of goes") {
   CHECK(l.at(5, 9.75)->data().segid == 1);
 }
 
+TEST_CASE("a sliver goes when the cut gave the rest of its outline to ground") {
+  auto l = walls();
+  auto rest = l.at(5, 5);
+  rest->data().label = l.ids.size();  // the first ground label
+  rest->data().in_footprint = false;
+  rest->data().is_ground = true;
+  CHECK(l.drop() == std::set<int>{2});
+}
+
 TEST_CASE("a sliver with no allowed plane left stays") {
   auto l = walls();
   auto sliver = l.at(5, 9.75);

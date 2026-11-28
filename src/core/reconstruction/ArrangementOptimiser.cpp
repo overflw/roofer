@@ -26,6 +26,7 @@
 #include <CGAL/property_map.h>
 
 #include <algorithm>
+#include <map>
 #include <optional>
 #include <roofer/reconstruction/ArrangementBase.hpp>
 #include <roofer/reconstruction/ArrangementOptimiser.hpp>
@@ -406,7 +407,8 @@ namespace roofer::reconstruction {
     };
     std::map<int, double> covered, outline;
     for (auto face : arr.face_handles()) {
-      if (!labelled(face)) continue;
+      // the cut takes faces it labels ground out of the footprint
+      if (!face->data().in_footprint && !face->data().is_ground) continue;
       std::optional<double> a;
       auto area = [&] {
         if (!a) a = CGAL::to_double(arr_cell2polygon(face).area());
@@ -414,7 +416,8 @@ namespace roofer::reconstruction {
       };
       for (int id : narrow)
         if (allowed(face, id)) outline[id] += area();
-      if (narrow.count(ids[face->data().label]))
+      if (labelled(face) && narrow.count(ids[face->data().label]) &&
+          allowed(face, ids[face->data().label]))
         covered[ids[face->data().label]] += area();
     }
     // a quarter of the outline, and 0.5 m² but at most half of it
