@@ -88,7 +88,8 @@ namespace roofer::reconstruction {
    * quarter of its outline (the faces of the footprint, ground ones included,
    * that `allowed` gives it) or 0.5 m², but at most half of it, goes, unless
    * that would leave one of its faces, or of the planes gone before it in id
-   * order, without an allowed plane that stays (such small planes included).
+   * order, without an allowed plane that stays (a small plane kept this way
+   * counts).
    * Their faces take the cheapest allowed plane among their neighbours', in
    * rounds so a face can follow a relabelled neighbour, and then the cheapest
    * allowed plane of all. Equal costs go to the lower plane id.
