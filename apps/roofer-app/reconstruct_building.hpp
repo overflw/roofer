@@ -594,16 +594,8 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
     // a narrow plane labels only cells within its outline
     auto on_outline = [&](roofer::Arrangement_2::Face_handle f, int id) {
       auto n = narrow.find(id);
-      if (n == narrow.end()) return true;
-      if (f->number_of_holes() > 0) return false;
-      auto he = f->outer_ccb(), first = he;
-      do {
-        if (!roofer::reconstruction::in_rectangle(
-                n->second, CGAL::to_double(he->source()->point().x()),
-                CGAL::to_double(he->source()->point().y()), outline_margin))
-          return false;
-      } while (++he != first);
-      return true;
+      return n == narrow.end() || roofer::reconstruction::face_in_rectangle(
+                                      f, n->second, outline_margin);
     };
     ArrangementOptimiser->compute(
         arrangement, SegmentRasteriser->heightfield,
@@ -611,11 +603,11 @@ void reconstruct_building(BuildingObject& building, RooferConfig* cfg) {
         PlaneDetector_ground->pts_per_roofplane, optimiser_config,
         narrow.empty() ? nullptr : std::function(on_outline));
     // a structure the graph cut left only a sliver of goes
-    std::map<int, double> least_area;
-    for (const auto& [id, r] : narrow)
-      least_area[id] = roofer::reconstruction::narrow_least_area(r);
+    std::set<int> narrow_ids;
+    for (const auto& [id, r] : narrow) narrow_ids.insert(id);
     for (auto id : roofer::reconstruction::drop_small_labels(
-             arrangement, PlaneDetector->pts_per_roofplane, least_area))
+             arrangement, PlaneDetector->pts_per_roofplane, narrow_ids,
+             on_outline))
       narrow.erase(id);
     timings["ArrangementOptimiser"] =
         std::chrono::high_resolution_clock::now() - t0;

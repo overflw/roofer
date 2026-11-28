@@ -110,14 +110,6 @@ namespace roofer::reconstruction {
     }
   }
 
-  // The least area the faces of a structure outlined by `r` cover, else they
-  // are a sliver of it: a quarter of `r`, and 0.5 m² but at most half of `r`.
-  inline double narrow_least_area(const Rectangle& r) {
-    double width = std::hypot(r[3][0] - r[0][0], r[3][1] - r[0][1]),
-           area = rectangle_axis(r)[2] * width;
-    return std::min(area / 2, std::max(0.5, area / 4));
-  }
-
   /**
    * The lines a narrow plane's outline puts in the arrangement: its long
    * sides, carried on like the regularised lines by `extension`, but no
@@ -478,6 +470,20 @@ namespace roofer::reconstruction {
     double u = (x - r[0][0]) * ux + (y - r[0][1]) * uy,
            v = ((x - r[0][0]) * vx + (y - r[0][1]) * vy) / lv;
     return u >= -margin && u <= lu + margin && v >= -margin && v <= lv + margin;
+  }
+
+  // Whether arrangement face `f` has no holes and lies in `r`, within
+  // `margin` (`to_double` is CGAL's, found by argument lookup).
+  template <typename Face_handle>
+  bool face_in_rectangle(Face_handle f, const Rectangle& r, double margin) {
+    if (f->number_of_holes() > 0) return false;
+    auto he = f->outer_ccb(), first = he;
+    do {
+      auto& p = he->source()->point();
+      if (!in_rectangle(r, to_double(p.x()), to_double(p.y()), margin))
+        return false;
+    } while (++he != first);
+    return true;
   }
 
   /**
