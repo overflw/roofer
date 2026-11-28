@@ -430,6 +430,7 @@ namespace roofer::reconstruction {
     auto pending = [&](Face_handle face) {
       return labelled(face) && small.count(ids[face->data().label]);
     };
+    auto fits = [&](size_t i) { return !small.count(ids[i]); };
     // on equal cost the lower plane id, not the hash order of the planes
     auto cheapest = [&](Face_handle face, auto candidate) {
       auto& cost = face->data().vertex_label_cost;
@@ -441,7 +442,6 @@ namespace roofer::reconstruction {
           best = i;
       return best;
     };
-    auto fits = [&](size_t i) { return !small.count(ids[i]); };
     std::vector<Face_handle> faces;
     std::set<int> kept;
     for (auto face : arr.face_handles())
@@ -457,25 +457,28 @@ namespace roofer::reconstruction {
       face->data().segid = ids[best];
       face->data().rms_error_to_avg = face->data().vertex_label_cost[best];
     };
+    auto neighbour_labels = [&](Face_handle face) {
+      std::set<size_t> labels;
+      auto add = [&](auto he) {
+        auto first = he;
+        do {
+          auto other = he->twin()->face();
+          if (labelled(other)) labels.insert(other->data().label);
+        } while (++he != first);
+      };
+      add(face->outer_ccb());
+      for (auto h = face->inner_ccbs_begin(); h != face->inner_ccbs_end(); ++h)
+        add(*h);
+      return labels;
+    };
     // in rounds, so a face can follow a neighbour relabelled before it
     while (true) {
       std::vector<std::pair<Face_handle, size_t>> moves;
       for (auto face : faces) {
         if (!pending(face)) continue;
-        std::set<size_t> neighbours;
-        auto add = [&](auto he) {
-          auto first = he;
-          do {
-            auto other = he->twin()->face();
-            if (labelled(other)) neighbours.insert(other->data().label);
-          } while (++he != first);
-        };
-        add(face->outer_ccb());
-        for (auto h = face->inner_ccbs_begin(); h != face->inner_ccbs_end();
-             ++h)
-          add(*h);
-        size_t best = cheapest(
-            face, [&](size_t i) { return fits(i) && neighbours.count(i); });
+        auto near = neighbour_labels(face);
+        size_t best =
+            cheapest(face, [&](size_t i) { return fits(i) && near.count(i); });
         if (best != ids.size()) moves.emplace_back(face, best);
       }
       if (moves.empty()) break;

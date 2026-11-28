@@ -373,9 +373,7 @@ namespace {
     Labelled(std::vector<std::pair<Point2, Point2>> segments, int n_planes,
              std::map<int, Rectangle> narrow_)
         : narrow(std::move(narrow_)) {
-      for (auto [a, b] : segments)
-        CGAL::insert(arr, roofer::Segment_2(roofer::Point_2(a[0], a[1]),
-                                            roofer::Point_2(b[0], b[1])));
+      add(segments);
       for (int id = 1; id <= n_planes; ++id)
         planes[id] = {roofer::Plane(0, 0, 1, -10 - id), {}};
       for (auto& [id, plane] : planes) ids.push_back(id);
@@ -384,6 +382,11 @@ namespace {
         face->data().in_footprint = true;
         set(face, 1, {{1, 0}});
       }
+    }
+    void add(std::vector<std::pair<Point2, Point2>> segments) {
+      for (auto [a, b] : segments)
+        CGAL::insert(arr, roofer::Segment_2(roofer::Point_2(a[0], a[1]),
+                                            roofer::Point_2(b[0], b[1])));
     }
     roofer::Arrangement_2::Face_handle at(double x, double y) {
       auto located = CGAL::Arr_walk_along_line_point_location(arr).locate(
@@ -467,13 +470,10 @@ TEST_CASE("a sliver with no allowed plane left stays") {
 
 TEST_CASE("a sliver face inside another follows it to its plane") {
   auto l = walls();
-  for (auto [a, b] :
-       std::vector<std::pair<Point2, Point2>>{{{4.9, 9.6}, {5.1, 9.6}},
-                                              {{5.1, 9.6}, {5.1, 9.9}},
-                                              {{5.1, 9.9}, {4.9, 9.9}},
-                                              {{4.9, 9.9}, {4.9, 9.6}}})
-    CGAL::insert(l.arr, roofer::Segment_2(roofer::Point_2(a[0], a[1]),
-                                          roofer::Point_2(b[0], b[1])));
+  l.add({{{4.9, 9.6}, {5.1, 9.6}},
+         {{5.1, 9.6}, {5.1, 9.9}},
+         {{5.1, 9.9}, {4.9, 9.9}},
+         {{4.9, 9.9}, {4.9, 9.6}}});
   auto inner = l.at(5, 9.75);
   inner->data().in_footprint = true;
   l.set(inner, 2, {{1, 1}, {2, 0}, {4, 0.5}});
