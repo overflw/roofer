@@ -190,7 +190,7 @@ namespace {
   };
   struct Config {
     float plane_epsilon = 0.2F, narrow_max_slope = 10, narrow_min_height = 0.5F,
-          narrow_min_length = 4;
+          narrow_max_height = 3, narrow_min_length = 4;
     int min_plane_points = 15;
   };
 }  // namespace
@@ -420,4 +420,17 @@ TEST_CASE("a structure the graph cut left a sliver of goes") {
 TEST_CASE("a short wall kept whole is no sliver") {
   Rectangle wall{Point2{0, 0}, Point2{2, 0}, Point2{2, 0.2}, Point2{0, 0.2}};
   CHECK(narrow_least_area(wall) < 0.4);
+}
+
+TEST_CASE("a structure far over the highest roof is no wall") {
+  std::vector<std::array<double, 3>> pts;
+  std::vector<int> labels;
+  roof(
+      [](double, double y) {
+        return std::abs(y - 3) < 0.2 ? 0.6 : std::abs(y - 7) < 0.2 ? 8.6 : 0.0;
+      },
+      pts, labels);
+  auto narrow = on_flat_roof(pts, labels);
+  REQUIRE(narrow.size() == 1);
+  CHECK(in_rectangle(narrow.begin()->second, 10, 3, 0));
 }

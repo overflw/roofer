@@ -133,6 +133,7 @@ namespace roofer::reconstruction {
       result.plane_detector.ransac_cluster_epsilon *= distance_scale;
       result.plane_detector.maximum_offset *= distance_scale;
       result.plane_detector.narrow_min_height *= distance_scale;
+      result.plane_detector.narrow_max_height *= distance_scale;
       result.plane_detector.narrow_min_length *= distance_scale;
       result.plane_detector.merge_off_distance *= distance_scale;
       result.plane_detector.merge_rms_slack *= distance_scale;
