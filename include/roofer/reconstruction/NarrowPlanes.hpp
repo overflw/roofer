@@ -525,7 +525,18 @@ namespace roofer::reconstruction {
       return narrow_runs(xyz, alpha_radius, 4 * alpha_radius,
                          config.plane_epsilon);
     };
-    // a run's outline, if it is narrow and stands over the roof on both sides
+    // the highest roof: the median height of the highest plane
+    double roof_top = NAN;
+    for (auto& [k, v] : planes) {
+      if (v.second.empty()) continue;
+      std::vector<double> z;
+      for (auto& p : v.second) z.push_back(p.z());
+      std::nth_element(z.begin(), z.begin() + z.size() / 2, z.end());
+      roof_top = std::fmax(roof_top, z[z.size() / 2]);
+    }
+    // a run's outline, if it is narrow, stands over the roof on both sides and
+    // not far over the highest roof: a wire or a ridge whose roof went
+    // undetected is no wall
     auto outline = [&](const std::vector<std::array<double, 3>>& xyz,
                        const std::vector<size_t>& run) {
       std::vector<Point2> xy;
@@ -534,7 +545,8 @@ namespace roofer::reconstruction {
       if (rect) {
         auto profile = narrow_profile(pts, *rect, alpha_radius);
         if (!(profile[1] - std::fmax(profile[0], profile[2]) >=
-              config.narrow_min_height))
+              config.narrow_min_height) ||
+            profile[1] - roof_top > config.narrow_max_height)
           rect.reset();
       }
       return rect;

@@ -95,6 +95,10 @@ namespace roofer::reconstruction {
     "Least height, in metres, a narrow structure stands over the roof beside " \
     "it.",                                                                     \
     config::greater_than(0.0F), public_)                                       \
+  X(float, narrow_max_height, 3.0F,                                            \
+    "Greatest height, in metres, a narrow structure stands over the highest "  \
+    "roof plane.",                                                             \
+    config::greater_than(0.0F), public_)                                       \
   X(float, narrow_min_length, 4.0F,                                            \
     "Least length, in metres, of a narrow structure away from the footprint "  \
     "and with roof of one height on both sides.",                              \

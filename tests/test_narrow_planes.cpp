@@ -188,7 +188,7 @@ namespace {
   };
   struct Config {
     float plane_epsilon = 0.2F, narrow_max_slope = 10, narrow_min_height = 0.5F,
-          narrow_min_length = 4;
+          narrow_max_height = 3, narrow_min_length = 4;
     int min_plane_points = 15;
   };
 }  // namespace
@@ -357,4 +357,17 @@ TEST_CASE("walls short of their corner both run on to it") {
   bool corner = false;  // the outer corner of the wall top
   for (auto& [k, r] : narrow) corner |= in_rectangle(r, 10.1, 4.9, 0);
   CHECK(corner);
+}
+
+TEST_CASE("a structure far over the highest roof is no wall") {
+  std::vector<std::array<double, 3>> pts;
+  std::vector<int> labels;
+  roof(
+      [](double, double y) {
+        return std::abs(y - 3) < 0.2 ? 0.6 : std::abs(y - 7) < 0.2 ? 8.6 : 0.0;
+      },
+      pts, labels);
+  auto narrow = on_flat_roof(pts, labels);
+  REQUIRE(narrow.size() == 1);
+  CHECK(in_rectangle(narrow.begin()->second, 10, 3, 0));
 }
